@@ -25,7 +25,7 @@ h1{font-size:19px;margin:0 0 4px;letter-spacing:-.01em}
 .rh{font-size:15px;color:var(--muted);font-weight:600;margin:0 0 10px}
 .sub{margin:0 0 14px;color:var(--muted);font-size:14px}
 form{display:flex;gap:8px;flex-wrap:wrap}
-input[type=tel]{flex:1 1 160px;min-height:46px;border:1px solid #cfcfcf;border-radius:8px;padding:0 12px;font-size:16px;background:#fff;color:inherit}
+input[type=tel]{flex:1 1 140px;min-height:46px;border:1px solid #cfcfcf;border-radius:8px;padding:0 12px;font-size:16px;background:#fff;color:inherit}
 input:focus,textarea:focus{outline:2px solid rgba(33,96,196,.35);border-color:var(--brand)}
 .btn{min-height:46px;border:0;border-radius:8px;background:var(--brand);color:#fff;font-weight:700;font-size:15px;padding:0 20px;cursor:pointer;font-family:inherit}
 .btn:active{background:var(--brand-2)}
@@ -68,9 +68,10 @@ footer p{margin:0 0 10px}
   <main>
     <section id="lookup" class="card">
       <h1 data-i18n="title">Consulte el estado de su reparación</h1>
-      <p class="sub" data-i18n="sub">Escriba el teléfono que dejó en la tienda.</p>
+      <p class="sub" data-i18n="sub">Escriba el teléfono que dejó en la tienda y el número de orden de su resguardo.</p>
       <form id="form">
-        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" data-i18n-ph="ph" placeholder="600 000 000">
+        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" data-i18n-ph="ph" placeholder="600 000 000" aria-label="Teléfono">
+        <input id="order" type="tel" inputmode="numeric" autocomplete="off" data-i18n-ph="orderPh" placeholder="Nº de orden" aria-label="Nº de orden">
         <button class="btn" id="submit" type="submit" data-i18n="btn">Ver estado</button>
       </form>
       <p class="err" id="err" hidden></p>
@@ -99,8 +100,10 @@ footer p{margin:0 0 10px}
       pageTitle: 'Estado de su reparación · Informática Torrent',
       trust: '+1.800 reseñas de 5 estrellas · Garantía por escrito · Desde 2003',
       title: 'Consulte el estado de su reparación',
-      sub: 'Escriba el teléfono que dejó en la tienda y verá sus reparaciones.',
+      sub: 'Escriba el teléfono que dejó en la tienda y el número de orden de su resguardo.',
       ph: '600 000 000',
+      orderPh: 'Nº de orden',
+      badOrder: 'Escriba el número de orden de su resguardo.',
       btn: 'Ver estado',
       loading: 'Consultando…',
       yourTicket: 'Su reparación',
@@ -110,7 +113,7 @@ footer p{margin:0 0 10px}
       closed: 'Entregado',
       ready: 'Listo para recoger. Puede pasar por la tienda.',
       closedNote: 'Reparación entregada. ¡Gracias!',
-      again: 'Consultar otro teléfono',
+      again: 'Hacer otra consulta',
       tooMany: 'Demasiadas consultas, inténtelo en unos minutos.',
       notFound: 'No encontramos ninguna reparación con esos datos.',
       badPhone: 'Escriba un teléfono válido.',
@@ -123,8 +126,10 @@ footer p{margin:0 0 10px}
       pageTitle: 'Repair status · Informática Torrent',
       trust: '1,800+ five-star reviews · Written warranty · Since 2003',
       title: 'Check the status of your repair',
-      sub: 'Enter the phone number you gave us in the shop.',
+      sub: 'Enter the phone number you gave us in the shop and the order number on your receipt.',
       ph: '600 000 000',
+      orderPh: 'Order no.',
+      badOrder: 'Please enter the order number on your receipt.',
       btn: 'Check status',
       loading: 'Checking…',
       yourTicket: 'Your repair',
@@ -134,7 +139,7 @@ footer p{margin:0 0 10px}
       closed: 'Delivered',
       ready: 'Ready for pickup. You can come to the shop.',
       closedNote: 'Repair delivered. Thank you!',
-      again: 'Check another phone number',
+      again: 'Check another repair',
       tooMany: 'Too many requests, please try again in a few minutes.',
       notFound: 'We could not find any repair with those details.',
       badPhone: 'Please enter a valid phone number.',
@@ -243,15 +248,18 @@ footer p{margin:0 0 10px}
     e.preventDefault();
     var phone = el('phone').value.replace(/[^\d]/g, '');
     if (phone.length < 9) { setErr(t('badPhone')); return; }
+    var order = el('order').value.replace(/[^\d]/g, '');
+    if (!order) { setErr(t('badOrder')); return; }
     setErr('');
     var btn = el('submit');
     btn.disabled = true;
     btn.textContent = t('loading');
-    post({ phone: el('phone').value }).then(function (d) {
+    post({ phone: el('phone').value, order: order }).then(function (d) {
       btn.disabled = false;
       btn.textContent = t('btn');
       if (d && d.error === 'too_many') { setErr(t('tooMany')); return; }
       if (d && d.error === 'bad_phone') { setErr(t('badPhone')); return; }
+      if (d && d.error === 'bad_order') { setErr(t('badOrder')); return; }
       if (!d || d.error) { setErr(t('net')); return; }
       applyShop(d.shop);
       last = { type: 'list', data: d };

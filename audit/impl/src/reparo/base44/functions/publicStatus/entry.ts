@@ -2,7 +2,8 @@
 // publicStatus — PUBLIC (no login). Powers /estado.html, the "Estado del ticket"
 // widget (replaces HelloClient's /check.html):
 //   POST { id: "<ticket_uuid>" }   → one order (QR code on the receipt)
-//   POST { phone: "+34 6xx…" }     → the client's recent orders (widget form)
+//   POST { phone: "+34 6xx…", order: "1234" } → that one order, only if both match
+//                                    (audit B-05: phone alone no longer lists orders)
 // Only non-personal fields are returned: no names, phones, codes or prices.
 // =============================================================================
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
@@ -42,24 +43,28 @@ Deno.serve(async (req) => {
   if (body.phone) {
     const p = normalizePhone(body.phone);
     if (p.length < 9) return Response.json({ error: 'bad_phone' }, { status: 400, headers: cors });
-    // Anti-abuso: 10 consultas por IP cada 10 minutos.
+    const order = String(body.order || '').replace(/\D/g, '');
+    if (!order) return Response.json({ error: 'bad_order' }, { status: 400, headers: cors });
+    // Anti-abuso (B-05): sin IP no se responde; 10 consultas por IP y 200 en total cada 10 minutos.
     const ip = String(
       req.headers.get('x-forwarded-for')?.split(',')[0]
       || req.headers.get('cf-connecting-ip')
       || req.headers.get('x-real-ip')
       || '',
     ).trim();
-    if (ip) {
-      const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-      const used = await sr.PublicLookupLog.count({ ip, at: { $gte: since } }).catch(() => 0);
-      if (used >= 10) return Response.json({ error: 'too_many' }, { status: 429, headers: cors });
-      await sr.PublicLookupLog.create({ ip, at: new Date().toISOString() }).catch(() => {});
-    }
-    const rows = await sr.RepairOrder.filter({ customer_phone: p }, '-number', 10, 0,
+    if (!ip) return Response.json({ error: 'too_many' }, { status: 429, headers: cors });
+    const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const [usedByIp, usedTotal] = await Promise.all([
+      sr.PublicLookupLog.count({ ip, at: { $gte: since } }).catch(() => 0),
+      sr.PublicLookupLog.count({ at: { $gte: since } }).catch(() => 0),
+    ]);
+    if (usedByIp >= 10 || usedTotal >= 200) return Response.json({ error: 'too_many' }, { status: 429, headers: cors });
+    await sr.PublicLookupLog.create({ ip, at: new Date().toISOString() }).catch(() => {});
+    const rows = await sr.RepairOrder.filter({ customer_phone: p }, '-number', 50, 0,
       ['ticket_uuid', 'order_id', 'status_name', 'status_color', 'status_group', 'is_open', 'device_brand', 'device_model', 'hc_created_at', 'created_date', 'estimated_at', 'closed_at']).catch(() => []);
-    // like HelloClient: open orders first, then the latest closed ones
-    const list = rows.map(view).sort((a: any, b: any) => Number(a.closed) - Number(b.closed));
-    return Response.json({ orders: list.slice(0, 5), shop }, { headers: cors });
+    // Same answer for "wrong phone" and "wrong number": nothing tells which one failed.
+    const match = rows.find((o: any) => String(o.order_id || '').replace(/\D/g, '') === order);
+    return Response.json({ orders: match ? [view(match)] : [], shop }, { headers: cors });
   }
 
   const id = String(body.id || '').trim();
