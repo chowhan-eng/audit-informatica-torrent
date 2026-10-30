@@ -9,6 +9,15 @@ export function inboxProEndpoint() {
   }
 }
 
+/** Secreto compartido con logOutboundMessage (mismo valor que OUTBOUND_LOG_SECRET en WhatsApp Pro). */
+function outboundLogSecret() {
+  try {
+    return String(secrets.get('OUTBOUND_LOG_SECRET') || '').trim();
+  } catch {
+    return '';
+  }
+}
+
 /**
  * WhatsApp Inbox Pro (Reparo): copia al CRM cada WhatsApp enviado para que la
  * conversación aparezca en la ficha del cliente. INBOX_PRO_ENDPOINT apunta a la
@@ -22,7 +31,8 @@ export async function copyWhatsappToInbox(entry) {
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // logOutboundMessage rechaza (401) las llamadas sin este secreto (auditoría B-02).
+      headers: { 'Content-Type': 'application/json', 'x-outbound-log-secret': outboundLogSecret() },
       body: JSON.stringify({
         // Formato de logOutboundMessage (Reparo)
         phone: String(entry.phone || '').replace(/\D/g, ''),
