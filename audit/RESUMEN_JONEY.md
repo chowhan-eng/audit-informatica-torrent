@@ -11,12 +11,7 @@
 9. **Qué hacer primero (semana 1):** cerrar los accesos sin login, cambiar el token, arreglar la pérdida de mensajes, poner un interruptor para pausar todos los avisos y empezar la copia de seguridad diaria.
 10. **Después:** semana 2, arreglos rápidos y limpieza. Semana 3, avisos nuevos (una semana en prueba antes). Semana 4, "Cobrar en TPV", resumen de la mañana por email y control de salud.
 11. **Cuánto cuesta al mes:** créditos de Base44 de ~2.980 a ~900 (−70 %). WhatsApp de Meta de ~6 € a ~10 € por los avisos nuevos. Sigue dentro del plan actual de 50 USD.
-12. **Lo que necesito de ti:**
-    - confirmar FRP/ROMs (redacción ambigua);
-    - decisión de la gestoría sobre las facturas F 2600408–411 y la cláusula de custodia;
-    - quién es cajero;
-    - los precios de los 10 modelos;
-    - el OK al texto de envíos.
+12. **Lo que necesito de ti:** confirmar FRP/ROMs (redacción ambigua); decisión de la gestoría sobre las facturas F 2600408–411 y la cláusula de custodia; quién es cajero; los precios de los 10 modelos; el OK al texto de envíos.
 13. **Durante la auditoría solo se hicieron 2 cambios**, los dos aprobados por ti (contador de facturas y parar las encuestas NPS). No se ha escrito a ningún cliente.
 14. Detalle técnico en `audit/REPORT.md` y la lista de tareas (64) en `audit/BACKLOG.csv`.
 15. **Espero tu aprobación para empezar por la semana 1.**
