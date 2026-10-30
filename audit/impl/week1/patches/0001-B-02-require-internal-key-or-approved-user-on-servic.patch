@@ -1,0 +1,1140 @@
+From 3c33a095894fd45713c6ee1ab65605fa28d9c70a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Claude=20=28auditor=C3=ADa=29?= <noreply@anthropic.com>
+Date: Fri, 30 Oct 2026 18:35:09 +0000
+Subject: [PATCH 1/2] B-02: require internal key or approved user on
+ service-role functions
+
+- shared internalAuth block (INTERNAL_CALL_KEY in body, constant-time) in
+  15 jobs/fan-out targets and sendPush; generateDraft drops the x-caller
+  bypass; logOutboundMessage requires OUTBOUND_LOG_SECRET header (TPV).
+- every internal invoke now carries the key (masterTick jobs, webhook
+  fan-out, reparoBridge/pollHelloClient sendPush, processAlerts draft).
+- masterTick ignores triggers within 200 s of the last start.
+- webhook no longer invokes liveKBCheck (B-13); extractMemory removed.
+
+LOCAL ONLY - not pushed, not deployed (Joney: zero deploys).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/functions/autoKBExtract/entry.ts       | 35 ++++++++
+ base44/functions/escalateWaiting/entry.ts     | 35 ++++++++
+ base44/functions/evaluateAutoReply/entry.ts   | 35 ++++++++
+ base44/functions/extractMemory/entry.ts       | 87 -------------------
+ base44/functions/flowExecutor/entry.ts        | 35 ++++++++
+ base44/functions/generateDraft/entry.ts       | 20 ++++-
+ base44/functions/libraryAutoReply/entry.ts    | 35 ++++++++
+ base44/functions/libraryShadowReport/entry.ts | 35 ++++++++
+ base44/functions/liveKBCheck/entry.ts         | 35 ++++++++
+ base44/functions/logOutboundMessage/entry.ts  |  7 ++
+ base44/functions/masterTick/entry.ts          | 16 +++-
+ base44/functions/pollHelloClient/entry.ts     | 37 +++++++-
+ base44/functions/processAlerts/entry.ts       | 37 +++++++-
+ base44/functions/processBroadcasts/entry.ts   | 35 ++++++++
+ base44/functions/reparoBridge/entry.ts        |  2 +-
+ base44/functions/retryFailedSends/entry.ts    | 35 ++++++++
+ base44/functions/sendDueReviews/entry.ts      | 35 ++++++++
+ base44/functions/sendNPS/entry.ts             | 35 ++++++++
+ base44/functions/sendPush/entry.ts            | 35 ++++++++
+ .../functions/sendScheduledMessages/entry.ts  | 35 ++++++++
+ base44/functions/watchdog/entry.ts            | 35 ++++++++
+ base44/functions/whatsappWebhook/entry.ts     |  8 +-
+ 22 files changed, 605 insertions(+), 99 deletions(-)
+ delete mode 100644 base44/functions/extractMemory/entry.ts
+
+diff --git a/base44/functions/autoKBExtract/entry.ts b/base44/functions/autoKBExtract/entry.ts
+index 2b7a7ac..8d73be6 100644
+--- a/base44/functions/autoKBExtract/entry.ts
++++ b/base44/functions/autoKBExtract/entry.ts
+@@ -16,6 +16,37 @@
+ 
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ // Normalize text for dedup: lowercase, strip accents, remove punctuation
+ function normalizeText(str) {
+   return String(str)
+@@ -39,6 +70,10 @@ function isDuplicate(factText, existingTexts, threshold = 0.55) {
+ 
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const db = base44.asServiceRole;
+ 
+   const runStart = new Date().toISOString();
+diff --git a/base44/functions/escalateWaiting/entry.ts b/base44/functions/escalateWaiting/entry.ts
+index 7c31eb2..21e3719 100644
+--- a/base44/functions/escalateWaiting/entry.ts
++++ b/base44/functions/escalateWaiting/entry.ts
+@@ -30,6 +30,37 @@
+ // =============================================================================
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.34';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ const META_VERSION = 'v23.0';
+ const MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000; // never escalate streaks older than 24h
+ 
+@@ -116,6 +147,10 @@ async function sendTemplate(settings: Record<string, string>, to: string, text:
+ 
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const db = base44.asServiceRole.entities;
+ 
+   try {
+diff --git a/base44/functions/evaluateAutoReply/entry.ts b/base44/functions/evaluateAutoReply/entry.ts
+index 429249d..feed6bc 100644
+--- a/base44/functions/evaluateAutoReply/entry.ts
++++ b/base44/functions/evaluateAutoReply/entry.ts
+@@ -7,6 +7,37 @@
+ 
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ const BLOCKED_CATEGORIES = ['complaint', 'warranty', 'quote_negotiation', 'other'];
+ 
+ // =============================================================================
+@@ -56,6 +87,10 @@ function isWithinBusinessHours(settings, d = new Date()) {
+ 
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const db = base44.asServiceRole;
+ 
+   try {
+diff --git a/base44/functions/extractMemory/entry.ts b/base44/functions/extractMemory/entry.ts
+deleted file mode 100644
+index bbaaf08..0000000
+--- a/base44/functions/extractMemory/entry.ts
++++ /dev/null
+@@ -1,87 +0,0 @@
+-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+-
+-Deno.serve(async (req) => {
+-  const base44 = createClientFromRequest(req);
+-
+-  const { customer_id, memory_extractions, interaction_summary, detected_language } = await req.json();
+-
+-  if (!customer_id) return Response.json({ error: 'Missing customer_id' }, { status: 400 });
+-
+-  // Find existing record
+-  const existing = await base44.asServiceRole.entities.CustomerInsights.filter({ customer_id });
+-  const record = existing?.[0] ?? null;
+-
+-  const now = new Date().toISOString();
+-
+-  if (!record) {
+-    // Create new memory record
+-    const newRecord = {
+-      customer_id,
+-      interaction_count: 1,
+-      last_interaction_summary: interaction_summary ?? '',
+-      language_preference: detected_language ?? '',
+-      updated_at: now,
+-      devices_owned: [],
+-      past_repairs: [],
+-      personal_facts: {},
+-      emotional_patterns_log: []
+-    };
+-
+-    for (const extraction of (memory_extractions ?? [])) {
+-      applyExtraction(newRecord, extraction, true);
+-    }
+-
+-    await base44.asServiceRole.entities.CustomerInsights.create(newRecord);
+-  } else {
+-    // Update existing record
+-    const updates = {
+-      interaction_count: (record.interaction_count ?? 0) + 1,
+-      last_interaction_summary: interaction_summary ?? record.last_interaction_summary,
+-      updated_at: now,
+-      devices_owned: record.devices_owned ?? [],
+-      past_repairs: record.past_repairs ?? [],
+-      personal_facts: record.personal_facts ?? {},
+-      emotional_patterns_log: record.emotional_patterns_log ?? []
+-    };
+-
+-    if (detected_language) updates.language_preference = detected_language;
+-
+-    for (const extraction of (memory_extractions ?? [])) {
+-      applyExtraction(updates, extraction, false);
+-    }
+-
+-    await base44.asServiceRole.entities.CustomerInsights.update(record.id, updates);
+-  }
+-
+-  return Response.json({ status: 'ok' });
+-});
+-
+-function applyExtraction(record, extraction, isNew) {
+-  const { key, value } = extraction;
+-  if (!key || !value) return;
+-
+-  switch (key) {
+-    case 'name_preference':
+-      record.name_preference = value;
+-      break;
+-    case 'device_owned':
+-      if (!record.devices_owned.includes(value)) record.devices_owned.push(value);
+-      break;
+-    case 'past_repair':
+-      if (!record.past_repairs.includes(value)) record.past_repairs.push(value);
+-      break;
+-    case 'personal_fact':
+-      record.personal_facts[`fact_${Date.now()}`] = value;
+-      break;
+-    case 'communication_style':
+-      record.communication_style = value;
+-      break;
+-    case 'language_preference':
+-      record.language_preference = value;
+-      break;
+-    case 'emotional_pattern':
+-      record.emotional_patterns = value;
+-      record.emotional_patterns_log.push(`${new Date().toISOString()}: ${value}`);
+-      break;
+-  }
+-}
+\ No newline at end of file
+diff --git a/base44/functions/flowExecutor/entry.ts b/base44/functions/flowExecutor/entry.ts
+index 1567d56..94b2af8 100644
+--- a/base44/functions/flowExecutor/entry.ts
++++ b/base44/functions/flowExecutor/entry.ts
+@@ -22,6 +22,37 @@
+ // =============================================================================
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ const FLOW_COOLDOWN_MS = 6 * 60 * 60 * 1000;   // same flow, same conversation
+ const AWAY_REGREET_MS = 12 * 60 * 60 * 1000;   // away greeting once per closed window
+ const PRESENCE_FRESH_MS = 2 * 60 * 1000;
+@@ -76,6 +107,10 @@ async function sendBot(base44: any, conversationId: string, text: string) {
+ 
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const db = base44.asServiceRole;
+ 
+   try {
+diff --git a/base44/functions/generateDraft/entry.ts b/base44/functions/generateDraft/entry.ts
+index 071bd11..557c709 100644
+--- a/base44/functions/generateDraft/entry.ts
++++ b/base44/functions/generateDraft/entry.ts
+@@ -18,6 +18,19 @@
+ 
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
++// <shared:internalAuth> — key part only (this function already has checkApproved).
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++// </shared:internalAuth>
++
+ // ── Reparo lookup — same helper in customerOverview, clientCard, libraryAutoReply
+ // (Base44 Deno functions can't share imports). Keep them in sync.
+ const REPARO_LOOKUP_URL = 'https://reparo-812bcab8.base44.app/api/apps/6ae22784825ce515812bcab8/functions/waLookup';
+@@ -62,9 +75,8 @@ Deno.serve(async (req) => {
+     const { conversationId, agentInput } = body ?? {};
+     if (!conversationId) return Response.json({ error: 'conversationId requerido' }, { status: 400 });
+ 
+-    // Approval gate — processAlerts & webhooks are service-role callers, skip check for them
+-    const callerHeader = req.headers.get('x-caller') || '';
+-    if (callerHeader !== 'internal' && !await checkApproved(base44, db)) {
++    // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++    if (!hasInternalKey(body) && !await checkApproved(base44, db)) {
+       return Response.json({ error: 'Acceso no autorizado' }, { status: 403 });
+     }
+ 
+@@ -341,7 +353,7 @@ SUMMARY: <resumen en una frase de lo que trata>`;
+       const arMode = (Array.isArray(settingsList2) ? settingsList2 : [])
+         .find(s => s.setting_key === 'autoreply_mode')?.setting_value || 'off';
+       if (arMode !== 'off') {
+-        base44.functions.invoke('evaluateAutoReply', { conversationId }).catch(() => {});
++        base44.functions.invoke('evaluateAutoReply', { _internal_key: Deno.env.get('INTERNAL_CALL_KEY') || '', conversationId }).catch(() => {});
+       }
+     } catch {}
+ 
+diff --git a/base44/functions/libraryAutoReply/entry.ts b/base44/functions/libraryAutoReply/entry.ts
+index 762b0aa..34796a9 100644
+--- a/base44/functions/libraryAutoReply/entry.ts
++++ b/base44/functions/libraryAutoReply/entry.ts
+@@ -24,6 +24,37 @@
+ // =============================================================================
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.34';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+ const msT = (x?: string | null) => (x ? new Date(x).getTime() : 0);
+ 
+@@ -99,6 +130,10 @@ const STATUS_READY = ['listo', 'listo + whatsapp'];
+ 
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const db = base44.asServiceRole.entities;
+   const out = (o: any) => Response.json(o);
+ 
+diff --git a/base44/functions/libraryShadowReport/entry.ts b/base44/functions/libraryShadowReport/entry.ts
+index c4a4096..04e6b96 100644
+--- a/base44/functions/libraryShadowReport/entry.ts
++++ b/base44/functions/libraryShadowReport/entry.ts
+@@ -13,6 +13,37 @@
+ // =============================================================================
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.34';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ const norm = (s: string) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+ const euros = (s: string) => new Set((norm(s).match(/(\d{1,4})\s?(?:€|eur)/g) || []).map((x) => x.replace(/\D/g, '')));
+ const STOP = new Set('de la el en y a que los las un una por para con del al es lo se te tu su mas o si no hola buenas gracias'.split(' '));
+@@ -20,6 +51,10 @@ const tokens = (s: string) => new Set(norm(s).replace(/[^a-z0-9\s]/g, ' ').split
+ 
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const db = base44.asServiceRole.entities;
+   try {
+     const cutoff = Date.now() - 2 * 3600 * 1000;
+diff --git a/base44/functions/liveKBCheck/entry.ts b/base44/functions/liveKBCheck/entry.ts
+index 30fdec4..ee122d8 100644
+--- a/base44/functions/liveKBCheck/entry.ts
++++ b/base44/functions/liveKBCheck/entry.ts
+@@ -10,6 +10,37 @@
+ 
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ const KB_KEYWORDS = [
+   /\d+\s*€/, /\d+\s*euros/i,
+   /precio/i, /presupuesto/i, /garantía/i, /garantia/i,
+@@ -40,6 +71,10 @@ function isDuplicate(factText, existingTexts, threshold = 0.55) {
+ 
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const db = base44.asServiceRole;
+ 
+   const log = async (level, message, detail) => {
+diff --git a/base44/functions/logOutboundMessage/entry.ts b/base44/functions/logOutboundMessage/entry.ts
+index a1f2ee2..cb8b0bb 100644
+--- a/base44/functions/logOutboundMessage/entry.ts
++++ b/base44/functions/logOutboundMessage/entry.ts
+@@ -5,6 +5,13 @@ export const config = { public: true };
+ Deno.serve(async (req) => {
+   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+ 
++  // Caller gate (audit B-02): only the TPV, which sends OUTBOUND_LOG_SECRET in a header.
++  const expectedLogKey = (Deno.env.get('OUTBOUND_LOG_SECRET') || '').trim();
++  const givenLogKey = req.headers.get('x-outbound-log-secret') || '';
++  let diff = givenLogKey.length === expectedLogKey.length && expectedLogKey ? 0 : 1;
++  for (let i = 0; i < givenLogKey.length && i < expectedLogKey.length; i++) diff |= givenLogKey.charCodeAt(i) ^ expectedLogKey.charCodeAt(i);
++  if (diff !== 0) return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), { status: 401 });
++
+   let body;
+   try {
+     body = await req.json();
+diff --git a/base44/functions/masterTick/entry.ts b/base44/functions/masterTick/entry.ts
+index 4f59044..dc5829e 100644
+--- a/base44/functions/masterTick/entry.ts
++++ b/base44/functions/masterTick/entry.ts
+@@ -63,6 +63,8 @@ async function loadSettings(sr: any): Promise<Record<string, { value: string; id
+   return map;
+ }
+ 
++const LAST_START_KEY = 'mastertick_last_started_at';
++
+ async function bumpCounter(sr: any, settings: any): Promise<number> {
+   const cur = parseInt(settings[TICK_COUNTER_KEY]?.value || '0', 10) || 0;
+   const next = (cur + 1) % 100000; // wrap to avoid unbounded growth
+@@ -87,6 +89,18 @@ Deno.serve(async (req) => {
+     return Response.json({ status: 'automations_disabled' });
+   }
+ 
++  // Min-interval guard (audit B-02): the cron fires every 5 min; any extra trigger within
++  // 200 s (e.g. an anonymous POST to the public URL) is ignored instead of re-running jobs.
++  const lastStart = Date.parse(flat[LAST_START_KEY] || '') || 0;
++  if (Date.now() - lastStart < 200_000) {
++    return Response.json({ status: 'skipped_too_soon' });
++  }
++  if (settings[LAST_START_KEY]) {
++    await sr.SystemSettings.update(settings[LAST_START_KEY].id, { setting_value: new Date().toISOString() });
++  } else {
++    await sr.SystemSettings.create({ setting_key: LAST_START_KEY, setting_value: new Date().toISOString() });
++  }
++
+   const tick = await bumpCounter(sr, settings);
+   const open = isWithinBusinessHours(flat);
+   const ran: string[] = [];
+@@ -96,7 +110,7 @@ Deno.serve(async (req) => {
+   // Helper: invoke an internal function, isolating failures.
+   const run = async (name: string) => {
+     try {
+-      await base44.asServiceRole.functions.invoke(name, {});
++      await base44.asServiceRole.functions.invoke(name, { _internal_key: Deno.env.get('INTERNAL_CALL_KEY') || '' });
+       ran.push(name);
+     } catch (e) {
+       const msg = String((e as any)?.message || e).slice(0, 300);
+diff --git a/base44/functions/pollHelloClient/entry.ts b/base44/functions/pollHelloClient/entry.ts
+index 048c9c7..1f16194 100644
+--- a/base44/functions/pollHelloClient/entry.ts
++++ b/base44/functions/pollHelloClient/entry.ts
+@@ -24,6 +24,37 @@
+ // =============================================================================
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ const HC_BASE = 'https://app.helloclient.by';
+ const META_VERSION = 'v23.0';
+ const MAX_PAGES = 10;
+@@ -650,6 +681,10 @@ Deno.serve(async (req) => {
+   const fast = u.searchParams.get('fast') === '1';
+ 
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const sr = base44.asServiceRole.entities;
+ 
+   if (fast) {
+@@ -959,7 +994,7 @@ Deno.serve(async (req) => {
+             (base44.asServiceRole && base44.asServiceRole.functions)
+               ? base44.asServiceRole
+               : base44;
+-          pushClient.functions.invoke('sendPush', {
++          pushClient.functions.invoke('sendPush', { _internal_key: Deno.env.get('INTERNAL_CALL_KEY') || '',
+             title: pushTitle,
+             body: pushBody,
+             tag: `order_${t.id}`,
+diff --git a/base44/functions/processAlerts/entry.ts b/base44/functions/processAlerts/entry.ts
+index 8101d73..dac6a00 100644
+--- a/base44/functions/processAlerts/entry.ts
++++ b/base44/functions/processAlerts/entry.ts
+@@ -5,8 +5,43 @@
+ 
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const db = base44.asServiceRole;
+ 
+   try {
+@@ -109,7 +144,7 @@ Deno.serve(async (req) => {
+             continue;
+           }
+           // Fire draft + auto-reply evaluation
+-          await base44.functions.invoke('generateDraft', { conversationId: draftRow.conversation_id });
++          await base44.functions.invoke('generateDraft', { _internal_key: Deno.env.get('INTERNAL_CALL_KEY') || '', conversationId: draftRow.conversation_id });
+           // Auto-reply evaluation runs inside generateDraft when autoreply_mode != 'off'
+           draftsProcessed++;
+         } catch (e) {
+diff --git a/base44/functions/processBroadcasts/entry.ts b/base44/functions/processBroadcasts/entry.ts
+index b936ec1..fa6691c 100644
+--- a/base44/functions/processBroadcasts/entry.ts
++++ b/base44/functions/processBroadcasts/entry.ts
+@@ -15,6 +15,37 @@
+ // =============================================================================
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ // Default Graph version — overridden by SystemSettings.meta_graph_version
+ let META_VERSION = 'v23.0';
+ const SCAN_DEADLINE_MS = 20000;
+@@ -166,6 +197,10 @@ function classifyMetaError(code) {
+ // ── Main ─────────────────────────────────────────────────────────────────────
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const sr = base44.asServiceRole.entities;
+ 
+   const settingsRows = await sr.SystemSettings.list(null, 500);
+diff --git a/base44/functions/reparoBridge/entry.ts b/base44/functions/reparoBridge/entry.ts
+index dd0a5b9..ef5014b 100644
+--- a/base44/functions/reparoBridge/entry.ts
++++ b/base44/functions/reparoBridge/entry.ts
+@@ -261,7 +261,7 @@ Deno.serve(async (req) => {
+   if (voiceText && mobileOk && !['discovered_silent', 'dup_guard_skip'].includes(action)) {
+     try {
+       const client = base44.asServiceRole?.functions ? base44.asServiceRole : base44;
+-      client.functions.invoke('sendPush', { title: `🔔 Orden ${t.id} · ${t.status_name}`, body: `${t.client_name} — ${t.device_model || 'dispositivo'}`, tag: `order_${t.id}`, url: '/estado-whatsapp' }).catch(() => {});
++      client.functions.invoke('sendPush', { _internal_key: Deno.env.get('INTERNAL_CALL_KEY') || '', title: `🔔 Orden ${t.id} · ${t.status_name}`, body: `${t.client_name} — ${t.device_model || 'dispositivo'}`, tag: `order_${t.id}`, url: '/estado-whatsapp' }).catch(() => {});
+     } catch { /* never fail on push */ }
+   }
+ 
+diff --git a/base44/functions/retryFailedSends/entry.ts b/base44/functions/retryFailedSends/entry.ts
+index 1111fc3..a6669cb 100644
+--- a/base44/functions/retryFailedSends/entry.ts
++++ b/base44/functions/retryFailedSends/entry.ts
+@@ -11,6 +11,37 @@
+ // =============================================================================
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ // Default Graph version — overridden by SystemSettings.meta_graph_version
+ let META_VERSION = 'v23.0';
+ const MAX_ATTEMPTS = 5;
+@@ -64,6 +95,10 @@ async function resolveTemplate(sr, flatSettings, purpose) {
+ 
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const sr = base44.asServiceRole.entities;
+ 
+   const settingsRows = await sr.SystemSettings.list(null, 500);
+diff --git a/base44/functions/sendDueReviews/entry.ts b/base44/functions/sendDueReviews/entry.ts
+index 70dbc48..8cef951 100644
+--- a/base44/functions/sendDueReviews/entry.ts
++++ b/base44/functions/sendDueReviews/entry.ts
+@@ -9,6 +9,37 @@
+ // =============================================================================
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ const META_VERSION = 'v23.0';
+ const collapse = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+ 
+@@ -151,6 +182,10 @@ async function parseManual(req) {
+ 
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const sr = base44.asServiceRole.entities;
+   const settings = await loadSettings(sr);
+   const { manual, id } = await parseManual(req);
+diff --git a/base44/functions/sendNPS/entry.ts b/base44/functions/sendNPS/entry.ts
+index 86704b7..708be85 100644
+--- a/base44/functions/sendNPS/entry.ts
++++ b/base44/functions/sendNPS/entry.ts
+@@ -13,10 +13,45 @@
+ // =============================================================================
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ const collapse = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+ 
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const sr = base44.asServiceRole.entities;
+ 
+   const settingsRows = await sr.SystemSettings.list(null, 500);
+diff --git a/base44/functions/sendPush/entry.ts b/base44/functions/sendPush/entry.ts
+index 4264a8f..77a56ce 100644
+--- a/base44/functions/sendPush/entry.ts
++++ b/base44/functions/sendPush/entry.ts
+@@ -6,7 +6,42 @@
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ import webPush from 'npm:web-push@3.6.7';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ Deno.serve(async (req) => {
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, createClientFromRequest(req)))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   try {
+     const { title, body, tag, url } = await req.json();
+ 
+diff --git a/base44/functions/sendScheduledMessages/entry.ts b/base44/functions/sendScheduledMessages/entry.ts
+index 518634d..f8a6e0c 100644
+--- a/base44/functions/sendScheduledMessages/entry.ts
++++ b/base44/functions/sendScheduledMessages/entry.ts
+@@ -6,8 +6,43 @@
+ // =============================================================================
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const sr = base44.asServiceRole.entities;
+ 
+   const settingsRows = await sr.SystemSettings.list(null, 500);
+diff --git a/base44/functions/watchdog/entry.ts b/base44/functions/watchdog/entry.ts
+index 86b2533..7540081 100644
+--- a/base44/functions/watchdog/entry.ts
++++ b/base44/functions/watchdog/entry.ts
+@@ -6,6 +6,37 @@
+ // =============================================================================
+ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
++// <shared:internalAuth> — same block in sendMessage, generateDraft, sendPush and the
++// masterTick jobs (Base44 Deno functions can't share imports). Keep them in sync.
++// Internal callers put INTERNAL_CALL_KEY in the body as _internal_key: the SDK's
++// functions.invoke() cannot set custom headers.
++function safeEqual(a, b) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++function hasInternalKey(body) {
++  const expected = (Deno.env.get('INTERNAL_CALL_KEY') || '').trim();
++  return safeEqual(String(body?._internal_key || ''), expected);
++}
++const INTERNAL_AUTH_ADMIN_EMAIL = 'chowhan@gmail.com';
++async function isApprovedUser(base44) {
++  try {
++    const user = await base44.auth.me();
++    if (!user) return false;
++    if (user.role === 'admin' || user.email === INTERNAL_AUTH_ADMIN_EMAIL) return true;
++    const profiles = await base44.asServiceRole.entities.UserProfile.filter({ user_id: user.id });
++    return (Array.isArray(profiles) ? profiles : [])[0]?.approval_status === 'approved';
++  } catch { return false; }
++}
++async function isAllowedCaller(req, base44) {
++  const raw = await req.clone().json().catch(() => ({}));
++  const data = raw && typeof raw === 'object' && raw.data ? raw.data : raw;
++  return hasInternalKey(data) || hasInternalKey(raw) || await isApprovedUser(base44);
++}
++// </shared:internalAuth>
++
+ const META_VERSION = 'v23.0';
+ // 16 min — pollHelloClient now runs every 5 minutes, so anything older than
+ // ~3 missed runs during working hours signals a real stall (cookie/session
+@@ -67,6 +98,10 @@ function isWithinBusinessHours(flatSettings, d = new Date()) {
+ 
+ Deno.serve(async (req) => {
+   const base44 = createClientFromRequest(req);
++  // Caller gate (audit B-02): internal callers send INTERNAL_CALL_KEY, staff need an approved session.
++  if (!(await isAllowedCaller(req, base44))) {
++    return Response.json({ ok: false, error: 'No autenticado' }, { status: 401 });
++  }
+   const sr = base44.asServiceRole.entities;
+   const settings = await loadSettings(sr);
+   const now = Date.now();
+diff --git a/base44/functions/whatsappWebhook/entry.ts b/base44/functions/whatsappWebhook/entry.ts
+index b578cc0..99cbcfe 100644
+--- a/base44/functions/whatsappWebhook/entry.ts
++++ b/base44/functions/whatsappWebhook/entry.ts
+@@ -423,7 +423,7 @@ async function handleInboundMessage(base44: any, db: any, token: string, msg: an
+       const settings: Record<string, string> = {};
+       (Array.isArray(settingsList) ? settingsList : []).forEach((s: any) => { settings[s.setting_key] = s.setting_value; });
+       if (!isWithinBusinessHours(settings)) return;
+-      await base44.functions.invoke('sendPush', {
++      await base44.functions.invoke('sendPush', { _internal_key: Deno.env.get('INTERNAL_CALL_KEY') || '',
+         title: `💬 ${convRecord.customer_name || fromPhone}`,
+         body: body.slice(0, 80),
+         tag: conversationId,
+@@ -434,18 +434,18 @@ async function handleInboundMessage(base44: any, db: any, token: string, msg: an
+ 
+   // Live KB check (fire-and-forget, only for text messages with content)
+   if (type === 'text' && body && body.trim()) {
+-    runBackground(base44.functions.invoke('liveKBCheck', { conversationId, messageText: body }).catch(() => {}));
++    // liveKBCheck disabled 2026-10 (audit B-13): raw text must not reach the LLM; daily anonymised batch replaces it (B-46).
+   }
+ 
+   // Track 4.1: chatbot flow executor (greetings, keyword flows, round-robin
+   // assignment). Fire-and-forget — NEVER blocks or alters ingestion.
+-  runBackground(base44.functions.invoke('flowExecutor', { conversationId, messageText: body, messageType: type }).catch(() => {}));
++  runBackground(base44.functions.invoke('flowExecutor', { _internal_key: Deno.env.get('INTERNAL_CALL_KEY') || '', conversationId, messageText: body, messageType: type }).catch(() => {}));
+ 
+   // Improvement Plan Phase 3: answer-library auto-reply engine (template-first,
+   // zero LLM). Defaults to SHADOW mode (logs only). Waits 60 s internally and
+   // only handles the last message of a burst. Text messages only.
+   if (type === 'text' && body && body.trim()) {
+-    runBackground(base44.functions.invoke('libraryAutoReply', { conversationId, messageTimestamp: msgTime }).catch(() => {}));
++    runBackground(base44.functions.invoke('libraryAutoReply', { _internal_key: Deno.env.get('INTERNAL_CALL_KEY') || '', conversationId, messageTimestamp: msgTime }).catch(() => {}));
+   }
+ 
+   // Auto-draft: enqueue/debounce into DraftQueue
+-- 
+2.43.0
+

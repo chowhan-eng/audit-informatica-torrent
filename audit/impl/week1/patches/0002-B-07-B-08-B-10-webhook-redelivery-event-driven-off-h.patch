@@ -1,0 +1,315 @@
+From 2bc770dd84120e734f29a0f52f899210401ceb00 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 30 Oct 2026 18:44:39 +0000
+Subject: [PATCH 2/2] B-07, B-08, B-10: webhook redelivery, event-driven
+ off-hours ack, global pause
+
+LOCAL ONLY - not pushed, not deployed.
+- B-07 whatsappWebhook: an inbound message that fails returns 500 so Meta
+  redelivers; a duplicate that slips past the pre-check is dropped after insert
+  and skips side effects. Status receipts never fail the delivery.
+- B-08 off-hours ack moved from the processAlerts sweep to the webhook: only for
+  messages received while closed, once per closed period, free-form text.
+- B-10 automations_enabled is now a real global pause: sendMessage refuses every
+  internal-key send, reparoBridge stops customer notices, red banner in inbox.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/functions/processAlerts/entry.ts    |  48 +---------
+ base44/functions/reparoBridge/entry.ts     |   1 +
+ base44/functions/sendMessage/entry.ts      |   7 ++
+ base44/functions/whatsappWebhook/entry.ts  | 102 +++++++++++++++++++--
+ src/components/AutomationsPausedBanner.jsx |  28 ++++++
+ src/components/Layout.jsx                  |   2 +
+ 6 files changed, 133 insertions(+), 55 deletions(-)
+ create mode 100644 src/components/AutomationsPausedBanner.jsx
+
+diff --git a/base44/functions/processAlerts/entry.ts b/base44/functions/processAlerts/entry.ts
+index dac6a00..935ad35 100644
+--- a/base44/functions/processAlerts/entry.ts
++++ b/base44/functions/processAlerts/entry.ts
+@@ -208,52 +208,8 @@ Deno.serve(async (req) => {
+     }
+     } // end if (shopOpen) for reminders
+ 
+-    // ── D: Off-hours auto-ack ──────────────────────────────────────────────────
+-    if (settings.offhours_autoack_enabled === 'true') {
+-      try {
+-        const ackDelayMinutes = parseInt(settings.offhours_autoack_delay_minutes || '10', 10);
+-        const ackText = settings.offhours_autoack_text || 'Gracias por tu mensaje. Estamos fuera de horario, te responderemos a la mayor brevedad.';
+-        const isOffHours = !isWithinBusinessHours(settings);
+-
+-        if (isOffHours) {
+-          const openConvs2 = await db.entities.Conversations.filter({ status: 'open' });
+-          const pendingConvs2 = await db.entities.Conversations.filter({ status: 'pending' });
+-          const candidates = [...(Array.isArray(openConvs2) ? openConvs2 : []), ...(Array.isArray(pendingConvs2) ? pendingConvs2 : [])]
+-            .filter(c => !c.is_deleted);
+-
+-          for (const conv of candidates) {
+-            if (!conv.last_customer_message_at) continue;
+-            const lastCustAt = new Date(conv.last_customer_message_at).getTime();
+-            const lastAgentAt = conv.last_agent_message_at ? new Date(conv.last_agent_message_at).getTime() : 0;
+-            if (lastAgentAt >= lastCustAt) continue; // already replied
+-            if (conv.no_reply_needed_at && new Date(conv.no_reply_needed_at).getTime() >= lastCustAt) continue;
+-
+-            const ageMinutes = (now.getTime() - lastCustAt) / 60000;
+-            if (ageMinutes < ackDelayMinutes) continue;
+-
+-            // Check 12h cooldown
+-            if (conv.last_autoack_at) {
+-              const hoursAgo = (now.getTime() - new Date(conv.last_autoack_at).getTime()) / 3600000;
+-              if (hoursAgo < 12) continue;
+-            }
+-
+-            try {
+-              await base44.functions.invoke('sendMessage', { _internal_key: Deno.env.get('INTERNAL_CALL_KEY') || '',
+-                conversationId: conv.id,
+-                customerPhone: conv.customer_phone,
+-                messageBody: ackText,
+-                messageKind: 'closed_notice',
+-              });
+-              await db.entities.Conversations.update(conv.id, { last_autoack_at: nowISO });
+-            } catch (e) {
+-              console.error(`[processAlerts] auto-ack failed for ${conv.id}:`, e?.message);
+-            }
+-          }
+-        }
+-      } catch (e) {
+-        console.error('[processAlerts] off-hours auto-ack error:', e?.message);
+-      }
+-    }
++    // ── D: Off-hours auto-ack ── moved to whatsappWebhook (audit B-08): event-driven,
++    // once per closed period, so no more bursts to old chats.
+ 
+     // ── E: Follow-up nudge flags ───────────────────────────────────────────────
+     if (shopOpen && settings.followup_nudge_enabled === 'true') {
+diff --git a/base44/functions/reparoBridge/entry.ts b/base44/functions/reparoBridge/entry.ts
+index ef5014b..f89f053 100644
+--- a/base44/functions/reparoBridge/entry.ts
++++ b/base44/functions/reparoBridge/entry.ts
+@@ -238,6 +238,7 @@ Deno.serve(async (req) => {
+   let waRes: any = { success: false };
+   if (msgText) {
+     if (!mobileOk) { action = 'landline_skip'; voiceText = voiceDetail(`Orden ${t.id}, el cliente no tiene móvil registrado, avisar por teléfono`, t, { withPrecio: true }); }
++    else if (flat.automations_enabled !== 'true') { action = 'automations_paused'; msgText = null; } // audit B-10
+     else if (await recentlySent(sr, t.id, t.status_name)) { action = 'dup_guard_skip'; msgText = null; }
+     else if (!statusTpl) { action = 'template_resolve_failed'; msgText = null; }
+     else {
+diff --git a/base44/functions/sendMessage/entry.ts b/base44/functions/sendMessage/entry.ts
+index aa6680a..dc5e3ea 100644
+--- a/base44/functions/sendMessage/entry.ts
++++ b/base44/functions/sendMessage/entry.ts
+@@ -215,6 +215,13 @@ Deno.serve(async (req) => {
+   const settings = {};
+   (Array.isArray(settingsList) ? settingsList : []).forEach((s) => { settings[s.setting_key] = s.setting_value; });
+   GRAPH = 'https://graph.facebook.com/' + ((settings.meta_graph_version || 'v23.0').trim());
++
++  // Global pause (audit B-10): with Ajustes → Automatizaciones off, nothing automatic
++  // reaches a customer. Only a person sending from the inbox (no internal key) gets through.
++  if (internal && settings.automations_enabled !== 'true') {
++    await log(db, 'info', 'sendMessage', `Pausa global: envío automático (${kind}) no enviado`, '');
++    return Response.json({ ok: false, skipped: 'automations_paused' });
++  }
+   // Forced out-of-window template: ALL window-closed sends use actualizacion_taller2
+   // (UTILITY, Meta-compliant) regardless of purpose='status' in MessageTemplates,
+   // unless the caller explicitly passes a templateName (honored as-is below).
+diff --git a/base44/functions/whatsappWebhook/entry.ts b/base44/functions/whatsappWebhook/entry.ts
+index 99cbcfe..a104a92 100644
+--- a/base44/functions/whatsappWebhook/entry.ts
++++ b/base44/functions/whatsappWebhook/entry.ts
+@@ -143,23 +143,39 @@ Deno.serve(async (req) => {
+ 
+   const token = await getMetaToken(db);
+ 
+-  try {
+-    for (const entry of body.entry ?? []) {
+-      for (const change of entry.changes ?? []) {
+-        const value = change.value ?? {};
+-        const contacts = value.contacts ?? [];
+-        for (const msg of value.messages ?? []) {
++  // Audit B-07: a message that could not be stored makes the whole delivery fail
++  // (HTTP 500) so Meta redelivers it; the meta_message_id check makes the retry
++  // safe for messages that did get stored. Status receipts never fail the
++  // delivery: their campaign counters are increments and must not be replayed.
++  let failedMessages = 0;
++  for (const entry of body.entry ?? []) {
++    for (const change of entry.changes ?? []) {
++      const value = change.value ?? {};
++      const contacts = value.contacts ?? [];
++      for (const msg of value.messages ?? []) {
++        try {
+           await handleInboundMessage(base44, db, token, msg, contacts);
++        } catch (e) {
++          failedMessages++;
++          await safeLog(db, 'error', 'whatsappWebhook', `Inbound message failed, asking Meta to redeliver (${msg?.id ?? 'sin id'})`, String((e as any)?.stack || e));
+         }
+-        for (const st of value.statuses ?? []) {
++      }
++      for (const st of value.statuses ?? []) {
++        try {
+           await handleStatus(db, st);
++        } catch (e) {
++          await safeLog(db, 'error', 'whatsappWebhook', 'Status update failed', String(e));
+         }
+       }
+     }
+-  } catch (e) {
+-    await safeLog(db, 'error', 'whatsappWebhook', 'Unhandled webhook error', String(e));
+   }
+ 
++  if (failedMessages > 0) {
++    return new Response(JSON.stringify({ ok: false, failed: failedMessages }), {
++      status: 500,
++      headers: { 'Content-Type': 'application/json' },
++    });
++  }
+   return ok();
+ });
+ 
+@@ -373,6 +389,20 @@ async function handleInboundMessage(base44: any, db: any, token: string, msg: an
+     is_read: false,
+   });
+ 
++  // Audit B-07: two deliveries of the same message can pass the check above at the
++  // same time. The oldest row wins; a later copy is removed and skips every side
++  // effect (auto-replies, acks, pushes) so the customer never gets them twice.
++  if (msgId && savedMsg?.id) {
++    const copies = await db.entities.Messages.filter({ meta_message_id: msgId }).catch(() => []);
++    const rows = (Array.isArray(copies) ? copies : [])
++      .sort((a: any, b: any) => String(a.created_date || '').localeCompare(String(b.created_date || '')) || String(a.id).localeCompare(String(b.id)));
++    if (rows.length > 1 && rows[0].id !== savedMsg.id) {
++      await db.entities.Messages.delete(savedMsg.id).catch(() => {});
++      await safeLog(db, 'info', 'whatsappWebhook', `Duplicate delivery dropped (${msgId})`, '');
++      return;
++    }
++  }
++
+   // ── Opt-out keyword detection (GDPR compliance) ──────────────────────────
+   // BAJA, STOP, NO, UNSUBSCRIBE, CANCELAR → set opted_out=true permanently.
+   runBackground((async () => {
+@@ -411,6 +441,12 @@ async function handleInboundMessage(base44: any, db: any, token: string, msg: an
+     }
+   })().catch(() => {}));
+ 
++  // Audit B-08: off-hours ack, event-driven (replaces the processAlerts sweep that
++  // sent 45 acks in 2 min to old chats on 26 Oct).
++  if (type === 'text' || MEDIA_TYPES.includes(type)) {
++    runBackground(maybeSendOffHoursAck(base44, db, conversationId, convRecord, normalizedPhone, body).catch(() => {}));
++  }
++
+   // Phase 5C: NotificationQueue upsert with debounce
+   runBackground(upsertNotificationQueue(db, base44, conversationId, convRecord, savedMsg?.id ?? msgId, body).catch(() => {}));
+ 
+@@ -454,6 +490,54 @@ async function handleInboundMessage(base44: any, db: any, token: string, msg: an
+   }
+ }
+ 
++// =============================================================================
++// Off-hours ack (audit B-08). Sent only when the message arrives while the shop
++// is closed, at most once per conversation per closed period. Free-form text:
++// the customer has just written, so the 24 h window is open and no template is
++// used. Goes through sendMessage, so the B-10 pause also stops it.
++// =============================================================================
++const OPT_OUT_WORDS = ['baja', 'stop', 'no', 'unsubscribe', 'cancelar', 'no mas', 'no más'];
++
++// Start of the closed period that contains `now` (searched in 5-min steps, max 4 days).
++function closedPeriodStart(settings: Record<string, string>, now: Date): Date {
++  const step = 5 * 60 * 1000;
++  let t = now.getTime();
++  for (let i = 0; i < (4 * 24 * 60) / 5; i++) {
++    const prev = new Date(t - step);
++    if (isWithinBusinessHours(settings, prev)) return new Date(t);
++    t -= step;
++  }
++  return new Date(t);
++}
++
++async function maybeSendOffHoursAck(base44: any, db: any, conversationId: string, conv: any, phone: string, text: string) {
++  const list = await db.entities.SystemSettings.list();
++  const settings: Record<string, string> = {};
++  (Array.isArray(list) ? list : []).forEach((s: any) => { settings[s.setting_key] = s.setting_value; });
++  if (settings.offhours_autoack_enabled !== 'true') return;
++
++  const now = new Date();
++  if (isWithinBusinessHours(settings, now)) return;
++  if (conv?.status === 'spam') return;
++  const lower = (text || '').toLowerCase().trim();
++  if (OPT_OUT_WORDS.some((kw) => lower === kw || lower.startsWith(kw + ' ') || lower.startsWith(kw + ',') || lower.startsWith(kw + '!'))) return;
++
++  // Once per closed period: re-read the conversation so a burst of messages sends one ack.
++  const fresh = await db.entities.Conversations.get(conversationId).catch(() => conv);
++  const lastAck = fresh?.last_autoack_at ? new Date(fresh.last_autoack_at).getTime() : 0;
++  if (lastAck >= closedPeriodStart(settings, now).getTime()) return;
++  await db.entities.Conversations.update(conversationId, { last_autoack_at: now.toISOString() });
++
++  const ackText = settings.offhours_autoack_text || 'Gracias por tu mensaje. Estamos fuera de horario, te responderemos a la mayor brevedad.';
++  await base44.functions.invoke('sendMessage', {
++    _internal_key: Deno.env.get('INTERNAL_CALL_KEY') || '',
++    conversationId,
++    customerPhone: phone,
++    messageBody: ackText,
++    messageKind: 'closed_notice',
++  });
++}
++
+ function shouldAutoDraft(conv: any, type: string, body: string): boolean {
+   if (type !== 'text') return false;
+   if (!body || body.trim().length < 2) return false;
+diff --git a/src/components/AutomationsPausedBanner.jsx b/src/components/AutomationsPausedBanner.jsx
+new file mode 100644
+index 0000000..7ecbd00
+--- /dev/null
++++ b/src/components/AutomationsPausedBanner.jsx
+@@ -0,0 +1,28 @@
++import { useEffect, useState } from 'react';
++import { base44 } from '@/api/base44Client';
++
++// Red banner while the global pause is on (audit B-10). Same switch as
++// Ajustes → Automatizaciones (SystemSettings.automations_enabled).
++export default function AutomationsPausedBanner() {
++  const [paused, setPaused] = useState(false);
++
++  useEffect(() => {
++    let cancelled = false;
++    const check = async () => {
++      try {
++        const rows = await base44.entities.SystemSettings.filter({ setting_key: 'automations_enabled' });
++        if (!cancelled) setPaused((rows?.[0]?.setting_value ?? '') !== 'true');
++      } catch { /* keep last state */ }
++    };
++    check();
++    const id = setInterval(check, 60_000);
++    return () => { cancelled = true; clearInterval(id); };
++  }, []);
++
++  if (!paused) return null;
++  return (
++    <div role="alert" className="bg-red-600 text-white text-sm font-medium px-4 py-2 text-center">
++      Automatizaciones en pausa: no sale ningún WhatsApp automático. Las respuestas manuales sí se envían.
++    </div>
++  );
++}
+diff --git a/src/components/Layout.jsx b/src/components/Layout.jsx
+index 1881528..065ed16 100644
+--- a/src/components/Layout.jsx
++++ b/src/components/Layout.jsx
+@@ -20,6 +20,7 @@ import { isPendingReply } from '@/lib/pending-reply-utils';
+ import { withRateLimitRetry } from '@/lib/rateLimitRetry';
+ import { SudoProvider } from '@/context/SudoContext';
+ import SudoCommandBox from '@/components/SudoCommandBox';
++import AutomationsPausedBanner from '@/components/AutomationsPausedBanner';
+ 
+ // Grouped nav sections
+ const NAV_GROUPS = [
+@@ -394,6 +395,7 @@ export default function Layout() {
+ 
+       {/* Main */}
+       <main className="flex-1 flex flex-col overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
++        <AutomationsPausedBanner />
+         <Outlet />
+       </main>
+ 
+-- 
+2.43.0
+
