@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="theme-color" content="#2160c4">
+<title>Estado de su reparación · Informática Torrent</title>
+<link rel="icon" href="/logo.png">
+<style>
+:root{--brand:#2160c4;--brand-2:#1a4d9e;--ink:#0a0a0a;--muted:#737373;--line:#e5e5e5;--surface:#f6f7f9}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--surface);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:14px 16px 34px}
+header{display:flex;align-items:center;gap:12px;padding:6px 0 14px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-weight:800;font-size:17px;letter-spacing:-.01em}
+.brand img{height:36px;width:auto;display:block}
+.lang{margin-left:auto;display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.lang button{border:0;background:none;font-weight:700;font-size:12px;color:var(--muted);padding:8px 10px;cursor:pointer}
+.lang button[aria-pressed=true]{background:var(--brand);color:#fff}
+.trust{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:12.5px;color:#404040;text-align:center;margin:0 0 16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px}
+h1{font-size:19px;margin:0 0 4px;letter-spacing:-.01em}
+.rh{font-size:15px;color:var(--muted);font-weight:600;margin:0 0 10px}
+.sub{margin:0 0 14px;color:var(--muted);font-size:14px}
+form{display:flex;gap:8px;flex-wrap:wrap}
+input[type=tel]{flex:1 1 160px;min-height:46px;border:1px solid #cfcfcf;border-radius:8px;padding:0 12px;font-size:16px;background:#fff;color:inherit}
+input:focus,textarea:focus{outline:2px solid rgba(33,96,196,.35);border-color:var(--brand)}
+.btn{min-height:46px;border:0;border-radius:8px;background:var(--brand);color:#fff;font-weight:700;font-size:15px;padding:0 20px;cursor:pointer;font-family:inherit}
+.btn:active{background:var(--brand-2)}
+.btn[disabled]{opacity:.6}
+.err{margin:12px 0 0;color:#b91c1c;font-size:14px}
+.ticket{border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:10px}
+.ticket:last-child{margin-bottom:0}
+.trow{display:flex;align-items:center;gap:10px}
+.num{font-weight:800}
+.pill{display:inline-block;color:#fff;font-weight:600;font-size:12px;padding:4px 9px;border-radius:6px;margin-left:auto;white-space:nowrap}
+.dev{color:var(--muted);font-size:13.5px;margin:6px 0 0}
+dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:10px 0 0;font-size:14px}
+dt{color:var(--muted)}dd{margin:0}
+.note{margin:10px 0 0;font-size:14px;padding:10px 12px;border-radius:8px;background:#eff6ff;color:#1e40af}
+.again{display:inline-block;margin-top:14px;color:var(--brand);font-weight:600;font-size:14px;text-decoration:none}
+.muted{color:var(--muted)}
+footer{margin-top:18px;border-top:1px solid var(--line);padding-top:14px;font-size:13px;color:var(--muted);text-align:center}
+footer p{margin:0 0 10px}
+.actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.actions a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 16px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;border:1px solid var(--line);background:#fff;color:var(--ink)}
+.actions a.wa{background:#25d366;border-color:#25d366;color:#08331c}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="https://informaticatorrent.com">
+      <img id="logo" src="/logo.png" alt="Informática Torrent" onerror="this.style.display='none'">
+      <span id="brandName">Informática Torrent</span>
+    </a>
+    <div class="lang">
+      <button type="button" data-lang="es" aria-pressed="true">ES</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+  </header>
+
+  <p class="trust" data-i18n="trust">+1.800 reseñas de 5 estrellas · Garantía por escrito · Desde 2003</p>
+
+  <main>
+    <section id="lookup" class="card">
+      <h1 data-i18n="title">Consulte el estado de su reparación</h1>
+      <p class="sub" data-i18n="sub">Escriba el teléfono que dejó en la tienda.</p>
+      <form id="form">
+        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" data-i18n-ph="ph" placeholder="600 000 000">
+        <button class="btn" id="submit" type="submit" data-i18n="btn">Ver estado</button>
+      </form>
+      <p class="err" id="err" hidden></p>
+    </section>
+    <section id="result" hidden></section>
+  </main>
+
+  <footer>
+    <p data-i18n="addr">C/ Germanies 74, Torrent (Valencia)</p>
+    <div class="actions">
+      <a id="tel" href="tel:+34961564693" data-i18n="call">Llamar</a>
+      <a id="wa" class="wa" href="https://wa.me/34601110325" target="_blank" rel="noreferrer" data-i18n="wa">WhatsApp</a>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var API = 'https://reparo-812bcab8.base44.app/api/apps/6ae22784825ce515812bcab8/functions/publicStatus';
+  var HEAD = { 'Content-Type': 'application/json', 'X-App-Id': '6ae22784825ce515812bcab8' };
+  var DEFAULT_TEL = '+34961564693', DEFAULT_WA = '34601110325';
+
+  var T = {
+    es: {
+      pageTitle: 'Estado de su reparación · Informática Torrent',
+      trust: '+1.800 reseñas de 5 estrellas · Garantía por escrito · Desde 2003',
+      title: 'Consulte el estado de su reparación',
+      sub: 'Escriba el teléfono que dejó en la tienda y verá sus reparaciones.',
+      ph: '600 000 000',
+      btn: 'Ver estado',
+      loading: 'Consultando…',
+      yourTicket: 'Su reparación',
+      yourTickets: 'Sus reparaciones',
+      created: 'Entrada',
+      estimate: 'Fecha prevista',
+      closed: 'Entregado',
+      ready: 'Listo para recoger. Puede pasar por la tienda.',
+      closedNote: 'Reparación entregada. ¡Gracias!',
+      again: 'Consultar otro teléfono',
+      tooMany: 'Demasiadas consultas, inténtelo en unos minutos.',
+      notFound: 'No encontramos ninguna reparación con esos datos.',
+      badPhone: 'Escriba un teléfono válido.',
+      net: 'No se pudo conectar. Inténtelo de nuevo.',
+      call: 'Llamar',
+      wa: 'WhatsApp',
+      addr: 'C/ Germanies 74, Torrent (Valencia)'
+    },
+    en: {
+      pageTitle: 'Repair status · Informática Torrent',
+      trust: '1,800+ five-star reviews · Written warranty · Since 2003',
+      title: 'Check the status of your repair',
+      sub: 'Enter the phone number you gave us in the shop.',
+      ph: '600 000 000',
+      btn: 'Check status',
+      loading: 'Checking…',
+      yourTicket: 'Your repair',
+      yourTickets: 'Your repairs',
+      created: 'Received',
+      estimate: 'Expected date',
+      closed: 'Delivered',
+      ready: 'Ready for pickup. You can come to the shop.',
+      closedNote: 'Repair delivered. Thank you!',
+      again: 'Check another phone number',
+      tooMany: 'Too many requests, please try again in a few minutes.',
+      notFound: 'We could not find any repair with those details.',
+      badPhone: 'Please enter a valid phone number.',
+      net: 'Connection failed. Please try again.',
+      call: 'Call',
+      wa: 'WhatsApp',
+      addr: 'C/ Germanies 74, Torrent (Valencia)'
+    }
+  };
+
+  var lang = localStorage.getItem('reparoLang') === 'en' ? 'en' : 'es';
+  var last = { type: 'form', data: null };
+  var el = function (id) { return document.getElementById(id); };
+  var t = function (k) { return (T[lang] && T[lang][k]) || T.es[k] || ''; };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var fmt = function (d) {
+    if (!d) return '—';
+    var x = new Date(d);
+    if (isNaN(x.getTime())) return '—';
+    return x.toLocaleDateString(lang === 'en' ? 'en-GB' : 'es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  function applyTexts() {
+    document.documentElement.lang = lang;
+    document.title = t('pageTitle');
+    var nodes = document.querySelectorAll('[data-i18n]');
+    for (var i = 0; i < nodes.length; i++) nodes[i].textContent = t(nodes[i].getAttribute('data-i18n'));
+    var phs = document.querySelectorAll('[data-i18n-ph]');
+    for (var j = 0; j < phs.length; j++) phs[j].setAttribute('placeholder', t(phs[j].getAttribute('data-i18n-ph')));
+    var bs = document.querySelectorAll('.lang button');
+    for (var k = 0; k < bs.length; k++) bs[k].setAttribute('aria-pressed', String(bs[k].getAttribute('data-lang') === lang));
+  }
+
+  function setErr(msg) {
+    var e = el('err');
+    if (!msg) { e.hidden = true; e.textContent = ''; return; }
+    e.hidden = false;
+    e.textContent = msg;
+  }
+
+  function applyShop(shop) {
+    if (!shop) return;
+    if (shop.name) { el('brandName').textContent = shop.name; el('logo').setAttribute('alt', shop.name); }
+    var first = String(shop.phone || '').split(',')[0].replace(/[^\d+]/g, '');
+    if (first) {
+      el('tel').setAttribute('href', 'tel:' + first);
+      el('wa').setAttribute('href', 'https://wa.me/' + first.replace(/^\+/, ''));
+    }
+  }
+
+  function card(o) {
+    var html = '<div class="ticket"><div class="trow"><span class="num">#' + esc(o.number) + '</span>' +
+      '<span class="pill" style="background:' + esc(o.color || '#2563eb') + '">' + esc(o.status || '—') + '</span></div>';
+    if (o.device) html += '<p class="dev">' + esc(o.device) + '</p>';
+    html += '<dl><dt>' + t('created') + '</dt><dd>' + fmt(o.created_at) + '</dd>';
+    if (!o.closed && o.estimated_at) html += '<dt>' + t('estimate') + '</dt><dd>' + fmt(o.estimated_at) + '</dd>';
+    if (o.closed_at) html += '<dt>' + t('closed') + '</dt><dd>' + fmt(o.closed_at) + '</dd>';
+    html += '</dl>';
+    if (o.ready) html += '<p class="note">' + t('ready') + '</p>';
+    else if (o.closed) html += '<p class="note">' + t('closedNote') + '</p>';
+    return html + '</div>';
+  }
+
+  function showForm() {
+    last = { type: 'form', data: null };
+    el('lookup').hidden = false;
+    el('result').hidden = true;
+    el('result').innerHTML = '';
+    var btn = el('submit');
+    btn.disabled = false;
+    btn.textContent = t('btn');
+    setErr('');
+  }
+
+  function showData() {
+    el('lookup').hidden = true;
+    el('result').hidden = false;
+    if (last.type === 'id') {
+      el('result').innerHTML = '<p class="rh">' + t('yourTicket') + '</p>' + card(last.data);
+    } else {
+      var list = (last.data.orders || []).map(card).join('');
+      el('result').innerHTML = '<p class="rh">' + t('yourTickets') + '</p>' +
+        (list || '<div class="card"><p class="muted" style="margin:0">' + t('notFound') + '</p></div>') +
+        '<a class="again" href="#" id="again">' + t('again') + '</a>';
+    }
+  }
+
+  function post(body) {
+    return fetch(API, { method: 'POST', headers: HEAD, body: JSON.stringify(body) }).then(function (r) {
+      return r.json().catch(function () { return {}; });
+    });
+  }
+
+  function byId(id) {
+    setErr('');
+    post({ id: id }).then(function (d) {
+      if (d && d.error === 'too_many') { showForm(); setErr(t('tooMany')); return; }
+      if (!d || d.error) { showForm(); setErr(t('notFound')); return; }
+      applyShop(d.shop);
+      last = { type: 'id', data: d };
+      showData();
+    }).catch(function () { showForm(); setErr(t('net')); });
+  }
+
+  el('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var phone = el('phone').value.replace(/[^\d]/g, '');
+    if (phone.length < 9) { setErr(t('badPhone')); return; }
+    setErr('');
+    var btn = el('submit');
+    btn.disabled = true;
+    btn.textContent = t('loading');
+    post({ phone: el('phone').value }).then(function (d) {
+      btn.disabled = false;
+      btn.textContent = t('btn');
+      if (d && d.error === 'too_many') { setErr(t('tooMany')); return; }
+      if (d && d.error === 'bad_phone') { setErr(t('badPhone')); return; }
+      if (!d || d.error) { setErr(t('net')); return; }
+      applyShop(d.shop);
+      last = { type: 'list', data: d };
+      showData();
+    }).catch(function () {
+      btn.disabled = false;
+      btn.textContent = t('btn');
+      setErr(t('net'));
+    });
+  });
+
+  el('result').addEventListener('click', function (e) {
+    if (e.target && e.target.id === 'again') { e.preventDefault(); showForm(); el('phone').focus(); }
+  });
+
+  var langBox = document.querySelector('.lang');
+  langBox.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-lang]') : null;
+    if (!b) return;
+    lang = b.getAttribute('data-lang');
+    localStorage.setItem('reparoLang', lang);
+    applyTexts();
+    if (last.type === 'id' || last.type === 'list') showData(); else showForm();
+  });
+
+  window.addEventListener('hashchange', function () {
+    var h = (location.hash || '').replace('#', '').trim();
+    if (h) byId(h); else showForm();
+  });
+
+  applyTexts();
+  var hash = (location.hash || '').replace('#', '').trim();
+  if (hash) byId(hash);
+})();
+</script>
+</body>
+</html>
