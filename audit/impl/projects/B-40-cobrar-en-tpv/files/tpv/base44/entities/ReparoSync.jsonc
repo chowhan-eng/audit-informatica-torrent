@@ -1,0 +1,72 @@
+{
+  "name": "ReparoSync",
+  "type": "object",
+  "description": "Avisos de cobro del TPV a Reparo (auditoría B-40). Una fila por venta con orden de reparación; reparoSyncSweep reintenta las pendientes.",
+  "properties": {
+    "sale_id": {
+      "type": "string"
+    },
+    "sale_ref": {
+      "type": "string"
+    },
+    "order_id": {
+      "type": "string"
+    },
+    "total": {
+      "type": "number"
+    },
+    "cashier": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "done",
+        "failed"
+      ],
+      "default": "pending"
+    },
+    "attempts": {
+      "type": "number",
+      "default": 0
+    },
+    "next_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "done_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "delivered": {
+      "type": "boolean",
+      "default": false
+    },
+    "last_error": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "sale_id",
+    "order_id"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

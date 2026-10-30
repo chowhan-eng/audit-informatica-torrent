@@ -1,0 +1,96 @@
+{
+  "name": "BackupRun",
+  "type": "object",
+  "description": "Copias de seguridad diarias (auditoría B-09). Una fila por ejecución de dailyBackup.",
+  "properties": {
+    "app": {
+      "type": "string"
+    },
+    "day": {
+      "type": "string",
+      "description": "Fecha de Madrid YYYY-MM-DD"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "monthly"
+      ],
+      "default": "daily"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "running",
+        "ok",
+        "failed"
+      ],
+      "default": "running"
+    },
+    "trigger": {
+      "type": "string",
+      "description": "schedule | manual:<email>"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_ms": {
+      "type": "number"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "[{entity, part, name, count, bytes, sha256, file_uri}]"
+    },
+    "totals": {
+      "type": "object"
+    },
+    "error": {
+      "type": "string"
+    },
+    "expired": {
+      "type": "boolean",
+      "default": false
+    },
+    "verified_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "verify_result": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "app",
+    "status"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

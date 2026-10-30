@@ -1,0 +1,45 @@
+{
+  "name": "Copia de seguridad diaria (14:15 lun-sáb)",
+  "description": "Auditoría B-09: guarda los datos de la app en archivos privados comprimidos. 30 diarias + 12 mensuales.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "15 14 * * 1-6",
+      "one_time_date": null,
+      "timezone": "Europe/Madrid",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "copia_seguridad_diaria",
+      "namespace": "base44",
+      "version": "1.0"
+    },
+    "do": [
+      {
+        "copia_diaria": {
+          "call": "invoke_backend_function",
+          "then": "end",
+          "with": {
+            "function_name": "dailyBackup",
+            "args": {}
+          },
+          "x-base44": {
+            "title": "Copia de seguridad",
+            "description": "Órdenes, clientes y configuración de Reparo"
+          }
+        }
+      }
+    ]
+  }
+}
