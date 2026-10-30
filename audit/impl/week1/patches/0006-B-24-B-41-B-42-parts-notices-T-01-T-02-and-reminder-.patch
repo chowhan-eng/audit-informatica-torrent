@@ -1,0 +1,124 @@
+From 9108133fa711ee3d6134aceaedfff68568e920b8 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 30 Oct 2026 19:28:16 +0000
+Subject: [PATCH] B-24/B-41/B-42: parts notices (T-01/T-02) and reminder action
+ (T-03/T-04/T-05)
+
+LOCAL ONLY - not pushed, not deployed. reparoBridge: 'Esperando material' and
+'Pieza recibida' now message the customer; new action 'reminder' sends through
+sendMessage, honours the pause and stays in shadow mode until reminders_live=true.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/functions/reparoBridge/entry.ts | 66 ++++++++++++++++++++++++++
+ 1 file changed, 66 insertions(+)
+
+diff --git a/base44/functions/reparoBridge/entry.ts b/base44/functions/reparoBridge/entry.ts
+index e1f2c53..511f902 100644
+--- a/base44/functions/reparoBridge/entry.ts
++++ b/base44/functions/reparoBridge/entry.ts
+@@ -65,6 +65,9 @@ function classify(statusName) {
+   const s = norm(statusName);
+   if (s.includes('entregado') && s.includes('resena')) return 'close_review';
+   if (s.includes('entregado')) return 'close';
++  // Audit B-24 (T-01/T-02): parts notices.
++  if (s.includes('esperando') && s.includes('material')) return 'material';
++  if (s.includes('pieza') && s.includes('recibid')) return 'pieza_recibida';
+   if (s.includes('no') && s.includes('reparacion')) return 'no_repair';
+   if (s.includes('listo') && (s.includes('whatsapp') || s.includes('wsp'))) return 'listo_wa';
+   if (s.includes('listo')) return 'listo_voice';
+@@ -74,6 +77,27 @@ function classify(statusName) {
+   if (s.includes('nuevo')) return 'nuevo';
+   return 'other';
+ }
++function readyDate(iso) {
++  const d = new Date(iso);
++  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'numeric' });
++}
++/** Reminder texts (audit B-41/B-42; T-03, T-04, T-05). */
++function buildReminder(kind, r, sig) {
++  const dev = r.device_model || 'dispositivo';
++  switch (kind) {
++    case 'budget_24h':
++      if (!r.estimated_cost) return null;
++      return `Hola ${r.client_name}, le recordamos el presupuesto de su ${dev} (Orden #${r.id}): ${r.estimated_cost}. ¿Desea que sigamos adelante? Puede responder a este mensaje.${sig}`;
++    case 'uncollected_3':
++      return `Hola ${r.client_name}, su ${dev} (Orden #${r.id}) está listo para recoger${r.since ? ` desde el ${readyDate(r.since)}` : ''}. Le esperamos en C/ Germanies 74 bajo, Torrent. Horario: L-V 9:30-14:00 y 17:00-20:30, sáb 10:00-14:00.${sig}`;
++    case 'uncollected_7':
++    case 'uncollected_15':
++      return `Hola ${r.client_name}, le recordamos que su ${dev} (Orden #${r.id}) sigue pendiente de recoger en nuestra tienda. Si necesita que le guardemos el equipo unos días más o tiene alguna duda, responda a este mensaje.${sig}`;
++    default:
++      return null;
++  }
++}
++
+ function buildMessage(action, t, sig) {
+   const dev = t.device_model || 'dispositivo';
+   switch (action) {
+@@ -91,6 +115,11 @@ function buildMessage(action, t, sig) {
+     }
+     case 'iniciar':
+       return `Hola ${t.client_name}, le contactamos desde Informática Torrent en relación con su ${dev} (Orden #${t.id}). Quedamos a su disposición para cualquier consulta; puede responder por aquí cuando lo desee y le atenderemos encantados.${sig}`;
++    // Audit B-24, texts T-01 and T-02 approved by Joney (Phase 7).
++    case 'material':
++      return `Hola ${t.client_name}, le informamos de que para su ${dev} (Orden #${t.id}) estamos esperando una pieza. Le avisaremos por aquí en cuanto llegue. Gracias por su paciencia.${sig}`;
++    case 'pieza_recibida':
++      return `Hola ${t.client_name}, ya ha llegado la pieza para su ${dev} (Orden #${t.id}) y continuamos con la reparación. Le avisaremos cuando esté listo.${sig}`;
+     default:
+       return null;
+   }
+@@ -194,6 +223,39 @@ Deno.serve(async (req) => {
+     return Response.json({ ok: true, orders_master: value }, { headers: cors });
+   }
+ 
++  // ---- reminders from Reparo (audit B-41: not collected after 3/7/15 days; B-42: budget
++  // without answer after 24 h). Texts T-03/T-04/T-05 approved by Joney. They go through
++  // sendMessage (log, FailedSend retry, 24 h window/template, B-10 pause). Until the
++  // setting reminders_live = 'true' they only log what would be sent (shadow week).
++  if (body.action === 'reminder') {
++    if (flat.automations_enabled !== 'true') return Response.json({ ok: true, sent: false, skipped: 'automations_paused' }, { headers: cors });
++    const kind = String(body.kind || '');
++    const r = {
++      id: String(body.order_id || ''), client_name: String(body.customer_name || ''), device_model: String(body.device || ''),
++      estimated_cost: String(body.estimated_cost || ''), since: String(body.since || ''),
++    };
++    const text = buildReminder(kind, r, flat.shop_signature || '');
++    if (!text || !r.id) return Response.json({ error: 'bad_reminder' }, { status: 400, headers: cors });
++    const phone = pickMobile(body.customer_phone);
++    if (!phone || !isSpanishMobile(phone)) return Response.json({ ok: true, sent: false, skipped: 'no_mobile' }, { headers: cors });
++    if (kind === 'budget_24h' && r.since) {
++      // No reminder if the customer already wrote after the budget was sent.
++      const convs = await sr.Conversations.filter({ customer_phone: phone }).catch(() => []);
++      const replied = (Array.isArray(convs) ? convs : []).some((c: any) => c.last_customer_message_at && c.last_customer_message_at > r.since);
++      if (replied) return Response.json({ ok: true, sent: false, skipped: 'customer_replied' }, { headers: cors });
++    }
++    if (flat.reminders_live !== 'true') {
++      await sr.WebhookLogs.create({ level: 'info', source: 'reparoBridge', message: `shadow ${kind} #${r.id} → ${phone}`, detail: text }).catch(() => {});
++      return Response.json({ ok: true, sent: false, shadow: true }, { headers: cors });
++    }
++    const res: any = await base44.functions.invoke('sendMessage', {
++      _internal_key: Deno.env.get('INTERNAL_CALL_KEY') || '',
++      customerPhone: phone, messageBody: text, messageKind: 'reminder',
++    }).catch((e: any) => ({ data: { ok: false, error: String(e?.message || e) } }));
++    const data = res?.data ?? res;
++    return Response.json({ ok: true, sent: !!data?.ok, detail: String(data?.error || data?.skipped || '') }, { headers: cors });
++  }
++
+   if (body.action !== 'event') return Response.json({ error: 'bad_action' }, { status: 400, headers: cors });
+ 
+   // ---- ticket event from Reparo → same behaviour as a HelloClient status change
+@@ -221,6 +283,10 @@ Deno.serve(async (req) => {
+       case 'listo_wa': action = 'listo_wa'; msgText = buildMessage('listo_wa', t, sig); voiceText = voiceDetail(`Orden ${t.id} lista, enviando WhatsApp`, t, { withAveria: true, withPrecio: true }); voiceKind = 'listo'; break;
+       case 'listo_voice': action = 'voice_only'; voiceText = voiceDetail(`Orden ${t.id} lista para recoger`, t, { withAveria: true, withPrecio: true }); voiceKind = 'listo'; break;
+       case 'no_repair': action = 'no_repair'; msgText = buildMessage('no_repair', t, sig); voiceText = voiceDetail(`Orden ${t.id}, no se ha podido reparar, avisando al cliente`, t, { withAveria: true }); break;
++      case 'material': case 'pieza_recibida':
++        action = cls; msgText = buildMessage(cls, t, sig);
++        voiceText = voiceDetail(cls === 'material' ? `Orden ${t.id}, esperando material` : `Orden ${t.id}, pieza recibida`, t);
++        break;
+       case 'contactar': case 'presupuesto': case 'iniciar':
+         action = cls; msgText = buildMessage(cls, t, sig);
+         voiceText = voiceDetail(cls === 'contactar' ? `Orden ${t.id}, contactar con el cliente` : cls === 'presupuesto' ? `Orden ${t.id}, enviando presupuesto` : `Orden ${t.id}, iniciando conversación`, t, { withAveria: true, withPrecio: true });
+-- 
+2.43.0
+

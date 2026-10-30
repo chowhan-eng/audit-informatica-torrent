@@ -1,0 +1,45 @@
+{
+  "name": "Recordatorios a clientes (10:30 lun-sáb)",
+  "description": "Auditoría B-41/B-42: equipos sin recoger a los 3, 7 y 15 días y presupuestos sin respuesta a las 24 h. En modo prueba hasta que WhatsApp Pro tenga reminders_live=true.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "30 10 * * 1-6",
+      "one_time_date": null,
+      "timezone": "Europe/Madrid",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "recordatorios_clientes",
+      "namespace": "base44",
+      "version": "1.0"
+    },
+    "do": [
+      {
+        "recordatorios": {
+          "call": "invoke_backend_function",
+          "then": "end",
+          "with": {
+            "function_name": "customerReminders",
+            "args": {}
+          },
+          "x-base44": {
+            "title": "Recordatorios a clientes",
+            "description": "Sin recoger 3/7/15 días y presupuesto 24 h"
+          }
+        }
+      }
+    ]
+  }
+}
