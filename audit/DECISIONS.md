@@ -52,6 +52,18 @@ Phone numbers given by Joney are recorded masked here (this repo is shared); the
 | D-27 | 13:00 Pendientes (D-15) | **Keep the daily WhatsApp to Japji at 13:00 as it works today, to +34 601 … 837.** | Matches TPV Settings `pending_digest_phone` [VERIFIED]. A-09a fixes still apply (Mon–Sat, all open tasks, retry). D-15 "no WhatsApp for internal system notifications" applies to system notices (brief, health check), not to this staff task list. |
 | D-28 | TorrentConnect | **Keep active (do not archive); used for technical operations.** | Archive list (D-05) stays at 8 apps. |
 
+## 2026-10-30 — Final approval
+
+| # | Topic | Decision (Joney, in chat) | Effect |
+|---|---|---|---|
+| D-29 | REPORT.md + BACKLOG.csv | **Approved.** The audit is closed; read-only mode ends. Implementation starts with Week 1 (P0/P1 security). **Stop and ask before every commit to an app or deploy to production.** | Every change is prepared as a reviewed patch first, then applied only after Joney's OK (AUDIT §7). |
+| D-30 | FRP (replaces D-23) | **Removing a Google account (FRP) requires a purchase invoice and the customer's DNI. Doing it without proof of ownership is strictly forbidden.** | Staff policy. AI never answers on this topic (always a person). |
+| D-31 | ROMs / piracy (replaces D-23) | **Strictly forbidden.** **The AI must never answer on these topics. Purge (delete completely) every knowledge-base entry about bypassing accounts without requirements or downloading ROMs.** | Explicit exception to AUDIT §4 rule 3 ("never delete"), limited to these KB entries. The list of entries is shown to Joney before deletion; a JSON export of them is kept in the audit folder as the only record. AI blocklist for these topics in drafts, auto-replies and extraction. |
+| D-32 | Production hotfixes | **CHANGELOG #1 (invoice counter) and #2 (NPS paused) confirmed and approved.** | No action. |
+| D-33 | Live measurements | **WhatsApp Pro inbox load, counter stopwatch and `tmpReparoPing` check are deferred to a later live session.** B-04 therefore keeps a "verify first" step for `tmpReparoPing`. | — |
+| D-34 | T-07 (mail-in text) | **The re-worded T-07 in REPORT.md §8 is approved** (GLS/Correos Express, return 10 € or 19 € both ways, Switch microSD exception). | Goes live with B-45. |
+| D-35 | Joney's own tasks | **Joney defines cashier roles, asks the gestoría (invoices F 2600408–411 and custody clause) and fills the top-10 price template.** | B-15, B-55, B-34 prices and T-06 wait for these inputs. |
+
 ### Open from D-04 (for Joney)
 - Confirm the real opening hours (Mon–Fri 09–14 / 16–21? Saturday hours?) so the "Horario" text and `shop_hours` can be fixed in one go.
 - Confirm the "Cómo llegar" content (address is known: C/ Germanies 74 bajo, 46900 Torrent; parking/transport details only if Joney provides them).
