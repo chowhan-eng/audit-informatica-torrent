@@ -1,0 +1,223 @@
+From 6c79188f9e6300634063765d689435a066d6309c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 30 Oct 2026 19:24:35 +0000
+Subject: [PATCH] B-17/B-18/B-19/B-20: masterTick every 10 min without
+ HelloClient jobs; hide dead screens
+
+LOCAL ONLY - not pushed, not deployed. masterTick no longer runs pollHelloClient,
+watchdog, libraryShadowReport, sendNPS, processBroadcasts; cron */10. Hidden:
+Importar HelloClient, Escanear HelloClient, Pedidos/Ventas/Inventario/Tareas.
+Voice queue behind voice_enabled; weekly content-signals workflow removed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/functions/masterTick/entry.ts          | 34 +++++---------
+ base44/functions/reparoBridge/entry.ts        |  3 +-
+ ...ildContentSignals_weekly_monday_0500.jsonc | 47 -------------------
+ base44/workflows/masterTick.jsonc             |  2 +-
+ src/components/Layout.jsx                     | 12 +----
+ src/pages/Dashboard.jsx                       | 13 +----
+ 6 files changed, 17 insertions(+), 94 deletions(-)
+ delete mode 100644 base44/workflows/buildContentSignals_weekly_monday_0500.jsonc
+
+diff --git a/base44/functions/masterTick/entry.ts b/base44/functions/masterTick/entry.ts
+index dc5829e..5b5825c 100644
+--- a/base44/functions/masterTick/entry.ts
++++ b/base44/functions/masterTick/entry.ts
+@@ -127,44 +127,32 @@ Deno.serve(async (req) => {
+   // ── Cadence schedule ──────────────────────────────────────────────────────
+   // Every tick: time-sensitive jobs (shop hours only).
+   // Every 3rd tick: broadcasts, retries, alerts (shop hours only).
+-  // Open hours, every 6th tick (~few times/day): reviews, NPS.
+-  // Off-peak (closed hours), every 12th tick (~once or twice/day): autoKBExtract, watchdog.
++  // (Schedule notes: see the B-17 comment below.)
+ 
++  // Audit B-17: the tick runs every 10 min (workflow) in shop hours. HelloClient
++  // polling, watchdog, libraryShadowReport, NPS and broadcasts no longer run
++  // (HelloClient is cut over; the others were switched off in Phase 5).
+   if (open) {
+-    await run('pollHelloClient');
+     await run('sendScheduledMessages');
+-    // Improvement Plan Phase 1: reminders + phone escalation run EVERY tick
+-    // while open (was every 3rd tick = up to 45 min late). Internal invokes
+-    // cost no automation credits; both are pure DB reads unless something is due.
++    // Reminders + phone escalation run every tick while open.
+     await run('processAlerts');
+     await run('escalateWaiting');
+ 
++    // Every 3rd tick (~30 min): retries and due review requests.
+     if (tick % 3 === 0) {
+-      await run('processBroadcasts');
+       await run('retryFailedSends');
+-    } else {
+-      skipped.push('processBroadcasts', 'retryFailedSends');
+-    }
+-
+-    if (tick % 6 === 0) {
+       await run('sendDueReviews');
+     } else {
+-      skipped.push('sendDueReviews');
++      skipped.push('retryFailedSends', 'sendDueReviews');
+     }
+-    // sendNPS paused 2026-10-30 (audit, approved by Joney): its loop of up to 200
+-    // sequential reads hit the platform read-rate limit on every run and made
+-    // concurrent Meta webhooks fail. Re-enable only after it batches its reads.
+-    skipped.push('sendNPS');
+   } else {
+-    skipped.push('pollHelloClient', 'sendScheduledMessages', 'processBroadcasts', 'retryFailedSends', 'processAlerts', 'escalateWaiting', 'sendDueReviews', 'sendNPS');
++    skipped.push('sendScheduledMessages', 'retryFailedSends', 'processAlerts', 'escalateWaiting', 'sendDueReviews');
+ 
+-    // Off-peak maintenance: run a couple of times per closed period.
+-    if (tick % 12 === 0) {
++    // Midday break: KB extraction (gated by its own autokb_live setting).
++    if (tick % 6 === 0) {
+       await run('autoKBExtract');
+-      await run('watchdog');
+-      await run('libraryShadowReport'); // Improvement Plan Phase 3 go-live gate (no LLM)
+     } else {
+-      skipped.push('autoKBExtract', 'watchdog', 'libraryShadowReport');
++      skipped.push('autoKBExtract');
+     }
+   }
+ 
+diff --git a/base44/functions/reparoBridge/entry.ts b/base44/functions/reparoBridge/entry.ts
+index f89f053..e1f2c53 100644
+--- a/base44/functions/reparoBridge/entry.ts
++++ b/base44/functions/reparoBridge/entry.ts
+@@ -258,7 +258,8 @@ Deno.serve(async (req) => {
+     }
+   }
+ 
+-  if (voiceText && action !== 'dup_guard_skip' && action !== 'discovered_silent') await sr.VoiceQueue.create({ text: voiceText, kind: voiceKind, spoken: false }).catch(() => {});
++  // Voice queue off unless voice_enabled=true (audit B-20, D-03).
++  if (flat.voice_enabled === 'true' && voiceText && action !== 'dup_guard_skip' && action !== 'discovered_silent') await sr.VoiceQueue.create({ text: voiceText, kind: voiceKind, spoken: false }).catch(() => {});
+   if (voiceText && mobileOk && !['discovered_silent', 'dup_guard_skip'].includes(action)) {
+     try {
+       const client = base44.asServiceRole?.functions ? base44.asServiceRole : base44;
+diff --git a/base44/workflows/buildContentSignals_weekly_monday_0500.jsonc b/base44/workflows/buildContentSignals_weekly_monday_0500.jsonc
+deleted file mode 100644
+index 7305356..0000000
+--- a/base44/workflows/buildContentSignals_weekly_monday_0500.jsonc
++++ /dev/null
+@@ -1,47 +0,0 @@
+-{
+-  "definition": {
+-    "document": {
+-      "dsl": "1.0.0",
+-      "name": "build_content_signals_weekly",
+-      "version": "1.0",
+-      "namespace": "base44"
+-    },
+-    "do": [
+-      {
+-        "build_signals": {
+-          "call": "invoke_backend_function",
+-          "with": {
+-            "function_name": "buildContentSignals",
+-            "args": {
+-              "_sched": "cs_build_7Kx9mQ2vL3"
+-            }
+-          },
+-          "then": "end",
+-          "x-base44": {
+-            "title": "Construir se\u00f1ales de contenido",
+-            "description": "Agrega reparaciones, preguntas y KB y guarda ContentSignalsCache"
+-          }
+-        }
+-      }
+-    ]
+-  },
+-  "description": "Rebuilds the anonymised ContentSignalsCache feed for informaticatorrent.com every Monday at 05:00 Europe/Madrid.",
+-  "name": "Build Content Signals (weekly Monday 05:00 Madrid)",
+-  "trigger": {
+-    "condition": null,
+-    "config": {
+-      "trigger_type": "scheduled",
+-      "events": [],
+-      "schedule_mode": "recurring",
+-      "cron_expression": "0 5 * * 1",
+-      "one_time_date": null,
+-      "timezone": "Europe/Madrid",
+-      "interval_value": null,
+-      "interval_unit": null,
+-      "interval_anchor": null,
+-      "ends_type": "never",
+-      "ends_on_date": null,
+-      "ends_after_count": null
+-    }
+-  }
+-}
+\ No newline at end of file
+diff --git a/base44/workflows/masterTick.jsonc b/base44/workflows/masterTick.jsonc
+index fde35a9..9312616 100644
+--- a/base44/workflows/masterTick.jsonc
++++ b/base44/workflows/masterTick.jsonc
+@@ -31,7 +31,7 @@
+       "trigger_type": "scheduled",
+       "events": [],
+       "schedule_mode": "recurring",
+-      "cron_expression": "*/5 9-20 * * 1-6",
++      "cron_expression": "*/10 9-20 * * 1-6",
+       "one_time_date": null,
+       "timezone": "Europe/Madrid",
+       "interval_value": null,
+diff --git a/src/components/Layout.jsx b/src/components/Layout.jsx
+index 065ed16..7ad0c75 100644
+--- a/src/components/Layout.jsx
++++ b/src/components/Layout.jsx
+@@ -30,17 +30,10 @@ const NAV_GROUPS = [
+       { path: '/esperando', icon: Clock, label: 'Esperando respuesta', badge: 'waiting' },
+       { path: '/conversaciones', icon: MessageSquare, label: 'Chats', badge: 'unread' },
+       { path: '/triaje', icon: ListChecks, label: 'Triaje Rápido', badge: 'unread' },
+-      { path: '/pedidos', icon: Wrench, label: 'Pedidos' },
+-    ],
+-  },
+-  {
+-    label: 'Taller',
+-    items: [
+-      { path: '/ventas',     icon: ShoppingCart, label: 'Ventas' },
+-      { path: '/inventario', icon: Boxes,        label: 'Inventario' },
+-      { path: '/tareas',     icon: ListTodo,     label: 'Tareas' },
+     ],
+   },
++  // Audit B-19: Pedidos, Ventas, Inventario and Tareas are hidden (Reparo and the TPV own
++  // orders, sales and stock). Routes stay reachable by URL for 30 days, then B-62 removes them.
+   {
+     label: 'Herramientas',
+     items: [
+@@ -62,7 +55,6 @@ const NAV_GROUPS = [
+     items: [
+       { path: '/sudo',     icon: Terminal,   label: 'SUDO', badge: 'errors' },
+       { path: '/taller',   icon: Settings2,  label: 'Ajustes del taller' },
+-      { path: '/importar-helloclient', icon: Database, label: 'Importar HelloClient' },
+       { path: '/usuarios', icon: UserCheck,  label: 'Usuarios', badge: 'pendingUsers' },
+       { path: '/ajustes',  icon: Settings,   label: 'Ajustes' },
+       { path: '/logs',     icon: ScrollText, label: 'Registros' },
+diff --git a/src/pages/Dashboard.jsx b/src/pages/Dashboard.jsx
+index bb9e81c..0abf833 100644
+--- a/src/pages/Dashboard.jsx
++++ b/src/pages/Dashboard.jsx
+@@ -102,18 +102,7 @@ export default function Dashboard() {
+           <p className="text-sm text-muted-foreground">Resumen de actividad</p>
+         </div>
+         <div className="flex flex-wrap gap-2">
+-          <div className="flex flex-col items-end gap-1">
+-            <button onClick={handleScan} disabled={syncing}
+-              title="Escanea HelloClient ahora (útil fuera del horario de tienda)"
+-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-border bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 min-h-[44px]">
+-              {syncing
+-                ? <RefreshCw size={14} className="animate-spin" />
+-                : <Search size={14} />} Escanear HelloClient
+-            </button>
+-            {syncResult && (
+-              <span className={`text-xs ${syncResult.ok ? 'text-green-600' : 'text-red-500'}`}>{syncResult.msg}</span>
+-            )}
+-          </div>
++          {/* «Escanear HelloClient» removed (audit B-18): HelloClient is cut over. */}
+           <button onClick={() => navigate('/conversaciones')}
+             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-white transition-colors min-h-[44px]"
+             style={{ backgroundColor: '#25d366' }}>
+-- 
+2.43.0
+

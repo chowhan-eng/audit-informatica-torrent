@@ -1,0 +1,54 @@
+{
+  "name": "SaleRequest",
+  "type": "object",
+  "description": "Auditoría B-12: una fila por intento de cobro con client_request_id. Evita que un reintento (red caída, doble clic, dos avisos de Stripe) cree dos ventas.",
+  "properties": {
+    "request_id": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "running",
+        "done",
+        "failed"
+      ],
+      "default": "running"
+    },
+    "sale_id": {
+      "type": "string"
+    },
+    "actor_email": {
+      "type": "string"
+    },
+    "error": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "state"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
