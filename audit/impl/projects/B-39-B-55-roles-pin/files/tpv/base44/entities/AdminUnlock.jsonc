@@ -1,0 +1,51 @@
+{
+  "name": "AdminUnlock",
+  "type": "object",
+  "description": "Pases de 30 min que entrega adminPin al acertar el PIN del encargado (auditoría B-55). Las funciones de stock, compras y rectificativas los exigen.",
+  "properties": {
+    "user_email": {
+      "type": "string"
+    },
+    "token_hash": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "user_email",
+    "token_hash"
+  ],
+  "rls": {
+    "read": {
+      "created_by_id": {
+        "$in": [
+          "__solo_servidor__"
+        ]
+      }
+    },
+    "create": {
+      "created_by_id": {
+        "$in": [
+          "__solo_servidor__"
+        ]
+      }
+    },
+    "update": {
+      "created_by_id": {
+        "$in": [
+          "__solo_servidor__"
+        ]
+      }
+    },
+    "delete": {
+      "created_by_id": {
+        "$in": [
+          "__solo_servidor__"
+        ]
+      }
+    }
+  }
+}

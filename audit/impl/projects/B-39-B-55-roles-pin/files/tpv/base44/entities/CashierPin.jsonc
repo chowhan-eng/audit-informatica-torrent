@@ -1,0 +1,62 @@
+{
+  "name": "CashierPin",
+  "type": "object",
+  "description": "PIN de cajero (auditoría B-55): solo hash PBKDF2 con sal. Solo lo leen y escriben las funciones del servidor (cashierPin).",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "user_email": {
+      "type": "string"
+    },
+    "pin_hash": {
+      "type": "string"
+    },
+    "salt": {
+      "type": "string"
+    },
+    "failed_attempts": {
+      "type": "number",
+      "default": 0
+    },
+    "locked_until": {
+      "type": "string"
+    },
+    "updated_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_id"
+  ],
+  "rls": {
+    "read": {
+      "created_by_id": {
+        "$in": [
+          "__solo_servidor__"
+        ]
+      }
+    },
+    "create": {
+      "created_by_id": {
+        "$in": [
+          "__solo_servidor__"
+        ]
+      }
+    },
+    "update": {
+      "created_by_id": {
+        "$in": [
+          "__solo_servidor__"
+        ]
+      }
+    },
+    "delete": {
+      "created_by_id": {
+        "$in": [
+          "__solo_servidor__"
+        ]
+      }
+    }
+  }
+}

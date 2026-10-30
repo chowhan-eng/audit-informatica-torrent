@@ -1,0 +1,168 @@
+From 24de180989d6ba24e69d647c8496bfd7f05f5f74 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 30 Oct 2026 19:32:51 +0000
+Subject: [PATCH] B-39: UserProfile writes admin-only (no self-approval);
+ customer data deletes admin-only
+
+LOCAL ONLY - not pushed, not deployed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/entities/Conversations.jsonc | 17 ++++-----------
+ base44/entities/Customers.jsonc     | 17 ++++-----------
+ base44/entities/Messages.jsonc      | 17 ++++-----------
+ base44/entities/UserProfile.jsonc   | 34 +++++++----------------------
+ 4 files changed, 20 insertions(+), 65 deletions(-)
+
+diff --git a/base44/entities/Conversations.jsonc b/base44/entities/Conversations.jsonc
+index 2e17bc2..00a3b4e 100644
+--- a/base44/entities/Conversations.jsonc
++++ b/base44/entities/Conversations.jsonc
+@@ -305,18 +305,9 @@
+       ]
+     },
+     "delete": {
+-      "$or": [
+-        {
+-          "user_condition": {
+-            "role": "admin"
+-          }
+-        },
+-        {
+-          "user_condition": {
+-            "role": "user"
+-          }
+-        }
+-      ]
++      "user_condition": {
++        "role": "admin"
++      }
+     }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/base44/entities/Customers.jsonc b/base44/entities/Customers.jsonc
+index e461ece..b2d29a1 100644
+--- a/base44/entities/Customers.jsonc
++++ b/base44/entities/Customers.jsonc
+@@ -140,18 +140,9 @@
+       ]
+     },
+     "delete": {
+-      "$or": [
+-        {
+-          "user_condition": {
+-            "role": "admin"
+-          }
+-        },
+-        {
+-          "user_condition": {
+-            "role": "user"
+-          }
+-        }
+-      ]
++      "user_condition": {
++        "role": "admin"
++      }
+     }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/base44/entities/Messages.jsonc b/base44/entities/Messages.jsonc
+index 894de7f..99ecce3 100644
+--- a/base44/entities/Messages.jsonc
++++ b/base44/entities/Messages.jsonc
+@@ -183,18 +183,9 @@
+       ]
+     },
+     "delete": {
+-      "$or": [
+-        {
+-          "user_condition": {
+-            "role": "admin"
+-          }
+-        },
+-        {
+-          "user_condition": {
+-            "role": "user"
+-          }
+-        }
+-      ]
++      "user_condition": {
++        "role": "admin"
++      }
+     }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/base44/entities/UserProfile.jsonc b/base44/entities/UserProfile.jsonc
+index 44e3099..90a5302 100644
+--- a/base44/entities/UserProfile.jsonc
++++ b/base44/entities/UserProfile.jsonc
+@@ -45,7 +45,7 @@
+         "supervisor"
+       ],
+       "default": "agent",
+-      "description": "Rol operativo: supervisor ve ajustes/analítica; agent solo bandeja"
++      "description": "Rol operativo: supervisor ve ajustes/anal\u00edtica; agent solo bandeja"
+     }
+   },
+   "required": [
+@@ -54,18 +54,9 @@
+   ],
+   "rls": {
+     "create": {
+-      "$or": [
+-        {
+-          "user_condition": {
+-            "role": "admin"
+-          }
+-        },
+-        {
+-          "created_by_condition": {
+-            "created_by": "{{user.email}}"
+-          }
+-        }
+-      ]
++      "user_condition": {
++        "role": "admin"
++      }
+     },
+     "read": {
+       "$or": [
+@@ -82,18 +73,9 @@
+       ]
+     },
+     "update": {
+-      "$or": [
+-        {
+-          "user_condition": {
+-            "role": "admin"
+-          }
+-        },
+-        {
+-          "created_by_condition": {
+-            "created_by": "{{user.email}}"
+-          }
+-        }
+-      ]
++      "user_condition": {
++        "role": "admin"
++      }
+     },
+     "delete": {
+       "user_condition": {
+@@ -101,4 +83,4 @@
+       }
+     }
+   }
+-}
+\ No newline at end of file
++}
+-- 
+2.43.0
+
