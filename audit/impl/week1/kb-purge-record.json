@@ -1,0 +1,110 @@
+{
+  "app": "WhatsApp Pro 69f23ccb4284f8588aa5b7a3",
+  "entity": "KnowledgeBase",
+  "decision": "D-31 (Joney, 2026-10-30): purge every KB entry about ROM/game downloads, piracy, or Google account (FRP) bypass without requirements",
+  "checkpoint_before": "6ae4d937619c4da0dfbce515",
+  "content_kept": false,
+  "purged_content_overwritten": [
+    {
+      "id": "6ae4934ec11efed2a5032389",
+      "title": "Recurso externo recomendado",
+      "status": "pending_review"
+    },
+    {
+      "id": "6ae31936da6658a96d945ae1",
+      "title": "Eliminación de cuenta de Google",
+      "status": "pending_review"
+    },
+    {
+      "id": "6ad8e80a8452e0120f42b613",
+      "title": "Desbloqueo de cuenta Google (FRP)",
+      "status": "pending_review"
+    },
+    {
+      "id": "6abb93fdf615c36334d87027",
+      "title": "Desbloqueo FRP Motorola Edge 30 Neo",
+      "status": "pending_review"
+    },
+    {
+      "id": "6ad6e5dad0a65ed0e35827e8",
+      "title": "Instalación de juegos en consolas modificadas",
+      "status": "pending_review"
+    },
+    {
+      "id": "6ad2ddb69be3498da5de57d3",
+      "title": "Funcionamiento de sistemas en Nintendo Switch modificada",
+      "status": "pending_review"
+    },
+    {
+      "id": "6a6091802a36f634736e08f4",
+      "title": "Sitios recomendados para archivos de Nintendo Switch",
+      "status": "pending_review"
+    },
+    {
+      "id": "6a6085791a9c95cc73f02458",
+      "title": "Páginas recomendadas para Nintendo Switch",
+      "status": "pending_review"
+    },
+    {
+      "id": "6a57a94b265628a7841954f8",
+      "title": "Compatibilidad de tarjeta SD en consolas modificadas",
+      "status": "pending_review"
+    },
+    {
+      "id": "6a578e068af648b14cc5655c",
+      "title": "Servicio de modificación digital de consolas",
+      "status": "pending_review"
+    },
+    {
+      "id": "6a5687b5a4bd16a8d2b0736a",
+      "title": "Instalación de juegos en consolas modificadas",
+      "status": "pending_review"
+    },
+    {
+      "id": "6a2d7acc5534ef894209cde9",
+      "title": "Precio de pirateo de PS4",
+      "status": "approved"
+    },
+    {
+      "id": "6a2a9c743d30082f3e65c1a1",
+      "title": "FAQs sobre descarga de juegos",
+      "status": "approved"
+    },
+    {
+      "id": "6a2a91a2b6c01ffb50a1a01e",
+      "title": "Limitación de servicios de Nintendo tras pirateo",
+      "status": "approved"
+    },
+    {
+      "id": "6a2a80bfde9501a2bc2164ca",
+      "title": "Funcionamiento del chip instalado",
+      "status": "approved"
+    },
+    {
+      "id": "6a27e0888f9c533989f93fdf",
+      "title": "Preguntas frecuentes sobre emuladores",
+      "status": "approved"
+    },
+    {
+      "id": "6a27e0814b595b23dd53bec5",
+      "title": "Coste adicional para partición",
+      "status": "approved"
+    }
+  ],
+  "archived_rejected_D22": [
+    {
+      "id": "6a2bb8cda1b7b791cf3cd3d2",
+      "title": "Servicio 24/7"
+    },
+    {
+      "id": "6a2ad5e03f23210c838bbb24",
+      "title": "Servicio 24/7"
+    },
+    {
+      "id": "6a2ad274920e1fe0beffbbe6",
+      "title": "Servicios de Emergencia"
+    }
+  ],
+  "method": "Content overwritten (title/content replaced, rejected, is_active=false); delete API unavailable for this app (returned not found / deleted 0). Applied 2026-10-30.",
+  "applied": true
+}

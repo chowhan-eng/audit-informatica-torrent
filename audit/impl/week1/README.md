@@ -10,9 +10,9 @@ Rule (D-29): every change is prepared here first. Claude applies it to an app (c
 
 | Item | What | Status | Needs from Joney |
 |---|---|---|---|
-| **B-01** | `sendMessage` requires internal key or approved user | **Patch ready** → `B-01-sendMessage-auth.md` | OK + WhatsApp test number |
+| **B-01** | `sendMessage` requires internal key or approved user | **APPLIED 30 Oct** (CHANGELOG #4) — anonymous 401 verified | T3: Joney sends one reply from the inbox |
 | **B-03** | Clear 3 secret rows; rotate Meta token and import secret | **Runbook ready** → `B-03-secrets.md` | OK + 10 min in Meta Business Manager |
-| **B-13** | Stop raw-text LLM; delete 17 piracy/FRP entries, archive 3 × 24/7 | **List ready** → `B-13-kb-purge-and-llm.md` | OK to delete (irreversible) |
+| **B-13** | Stop raw-text LLM; purge 17 piracy/FRP entries, archive 3 × 24/7 | **APPLIED 30 Oct** (CHANGELOG #3) — content overwritten (delete API unavailable) | — |
 | B-02 | Auth on the other public functions (generateDraft, sendPush, logOutboundMessage + TPV header, masterTick + jobs, remove extractMemory) | Next — same `internalAuth` block as B-01 | after B-01 is live |
 | B-04 | Undeploy zz*, cleanupTestData; tmpReparoPing (verify first, D-33) | Next | OK to delete 3–4 functions |
 | B-05 | publicStatus phone + order number | Next | OK on the new status-page wording |
