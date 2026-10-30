@@ -64,6 +64,15 @@ Phone numbers given by Joney are recorded masked here (this repo is shared); the
 | D-34 | T-07 (mail-in text) | **The re-worded T-07 in REPORT.md §8 is approved** (GLS/Correos Express, return 10 € or 19 € both ways, Switch microSD exception). | Goes live with B-45. |
 | D-35 | Joney's own tasks | **Joney defines cashier roles, asks the gestoría (invoices F 2600408–411 and custody clause) and fills the top-10 price template.** | B-15, B-55, B-34 prices and T-06 wait for these inputs. |
 
+## 2026-10-30 — Week 1 patch decisions (zero-deploy rule)
+
+| # | Topic | Decision (Joney, in chat) | Effect |
+|---|---|---|---|
+| D-36 | B-10 global pause | **Staff manual messages are still allowed while automations are paused.** Only automatic sends stop. | sendMessage refuses every send that carries the internal key (jobs, auto-replies, acks, flows, retries) when `automations_enabled` ≠ `true`; a person replying from the inbox (logged-in, approved session) still sends. reparoBridge stops customer notices. Red banner in the inbox while paused. Patch: WhatsApp Pro 2bc770d. |
+| D-37 | B-08 off-hours ack | **The off-hours ack is instant** (no 10-minute delay). | Sent by the webhook as soon as a message arrives while the shop is closed, once per conversation per closed period, free-form text (24 h window open, no template). The processAlerts sweep and `offhours_autoack_delay_minutes` are no longer used. Patch: WhatsApp Pro 2bc770d. |
+| D-38 | B-05 public status page | **Lookup by phone requires phone + order number.** | publicStatus returns only the one order where both match, same answer for any mismatch; no client IP → refused; 10 lookups per IP and 200 in total per 10 minutes. The QR link (`#uuid`) is unchanged. estado.html gets an order-number field. Patch: `audit/impl/src/reparo` d9b5d1b. |
+| D-39 | Deploy freeze | **Zero deploys, zero secret changes, zero app restarts in Base44** until the Meta token change (B-03) is done. | All Week 1 patches stay local. Applying them follows `impl/week1/B-02-B-04-B-05-local.md`. |
+
 ### Open from D-04 (for Joney)
 - Confirm the real opening hours (Mon–Fri 09–14 / 16–21? Saturday hours?) so the "Horario" text and `shop_hours` can be fixed in one go.
 - Confirm the "Cómo llegar" content (address is known: C/ Germanies 74 bajo, 46900 Torrent; parking/transport details only if Joney provides them).

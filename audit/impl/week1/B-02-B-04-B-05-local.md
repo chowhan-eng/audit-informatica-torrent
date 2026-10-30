@@ -26,8 +26,10 @@ Base snapshot of the originals: ddc35b4.
 6. Reparo: apply publicStatus + public/estado.html → QR link (`#uuid`) still works; phone + wrong number → "no encontramos"; 11th try → 429.
 7. Checkpoint again and write the CHANGELOG entries.
 
-The status-page wording is new: Joney checks the texts before step 5. The receipt shows the order number.
+Decisions recorded: D-36 (B-10 staff manual sends allowed during the pause), D-37 (B-08 ack is instant), D-38 (B-05 phone + order number). The code in `patches/0002-…` and `audit/impl/src/reparo` already implements them; no further code change is needed.
+
+**Gate:** nothing is applied before the Meta token change (B-03) is finished and Joney gives the deploy OK (D-39).
 
 ## Known limits
 - B-07: a message that fails after the conversation was updated but before the message row was saved can bump the unread counter twice on redelivery. Harmless.
-- B-10: Reparo and TPV functions that call Meta directly (TPV sendPendingDigest, tpvWhatsappRelay for documents) are not covered yet; staff-initiated documents are treated like manual replies.
+- B-10 (D-36): a person replying from the inbox is never blocked by the pause. Reparo and TPV functions that call Meta directly (TPV sendPendingDigest, tpvWhatsappRelay for documents) are not covered yet; staff-initiated documents are treated like manual replies.
