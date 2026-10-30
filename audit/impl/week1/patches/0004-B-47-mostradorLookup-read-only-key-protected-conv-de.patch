@@ -1,0 +1,130 @@
+From 886c44c8f27bbb527ebf4d9fae3de26ed64e2077 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 30 Oct 2026 19:20:47 +0000
+Subject: [PATCH] B-47: mostradorLookup (read-only, key-protected) + ?conv=
+ deep link
+
+LOCAL ONLY - not pushed, not deployed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/functions/mostradorLookup/entry.ts | 91 +++++++++++++++++++++++
+ src/pages/Conversaciones.jsx              |  3 +-
+ 2 files changed, 93 insertions(+), 1 deletion(-)
+ create mode 100644 base44/functions/mostradorLookup/entry.ts
+
+diff --git a/base44/functions/mostradorLookup/entry.ts b/base44/functions/mostradorLookup/entry.ts
+new file mode 100644
+index 0000000..f941922
+--- /dev/null
++++ b/base44/functions/mostradorLookup/entry.ts
+@@ -0,0 +1,91 @@
++// =============================================================================
++// mostradorLookup — búsqueda y panel «Hoy» de Mostrador (auditoría B-47).
++// Solo lectura. Server-to-server: cabecera X-Mostrador-Key = secreto MOSTRADOR_KEY
++// (mismo valor en Mostrador). Mostrador exige sesión de un empleado antes de llamar.
++//
++//   POST { action: 'search', q }  → chats por teléfono o nombre
++//   POST { action: 'hoy' }        → chats esperando respuesta y envíos fallidos
++// =============================================================================
++import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
++
++const BASE = 'https://whats-app-pro.base44.app';
++const rows = (x: any): any[] => (Array.isArray(x) ? x : (x?.items || []));
++const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
++
++function safeEqual(a: string, b: string) {
++  if (!a || !b || a.length !== b.length) return false;
++  let diff = 0;
++  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
++  return diff === 0;
++}
++
++function phoneVariants(raw: string): string[] {
++  let d = String(raw || '').replace(/\D/g, '');
++  if (d.startsWith('0034')) d = d.slice(2);
++  const out = new Set<string>([d]);
++  if (d.startsWith('34') && d.length === 11) out.add(d.slice(2));
++  if (d.length === 9) out.add('34' + d);
++  return [...out];
++}
++
++const chatItem = (c: any) => ({
++  app: 'whatsapp', type: 'chat', id: c.id,
++  title: c.customer_name || c.customer_phone || 'Chat',
++  subtitle: [c.customer_phone, String(c.last_message_preview || '').slice(0, 60)].filter(Boolean).join(' · '),
++  at: c.last_customer_message_at || c.last_message_timestamp || null,
++  url: `${BASE}/conversaciones?conv=${encodeURIComponent(c.id)}`,
++});
++
++const waiting = (c: any) => {
++  if (c.is_deleted || !c.last_customer_message_at) return false;
++  const cust = Date.parse(c.last_customer_message_at);
++  if (c.last_agent_message_at && Date.parse(c.last_agent_message_at) >= cust) return false;
++  if (c.no_reply_needed_at && Date.parse(c.no_reply_needed_at) >= cust) return false;
++  return true;
++};
++
++Deno.serve(async (req) => {
++  const expected = (Deno.env.get('MOSTRADOR_KEY') || '').trim();
++  if (!expected || !safeEqual(req.headers.get('X-Mostrador-Key') || '', expected)) {
++    return Response.json({ error: 'unauthorized' }, { status: 401 });
++  }
++  const base44 = createClientFromRequest(req);
++  const sr = base44.asServiceRole.entities;
++  const body = await req.json().catch(() => ({}));
++
++  if (body.action === 'search') {
++    const q = String(body.q || '').trim().slice(0, 60);
++    const digits = q.replace(/\D/g, '');
++    let found: any[] = [];
++    if (digits.length >= 9 && digits.length <= 13) {
++      found = rows(await sr.Conversations.filter({ customer_phone: { $in: phoneVariants(digits) } }).catch(() => []));
++    } else if (!digits && q.length >= 3) {
++      found = rows(await sr.Conversations.filter({ customer_name: { $regex: escapeRe(q), $options: 'i' } }).catch(() => []));
++    }
++    const list = found.filter((c) => !c.is_deleted)
++      .sort((a, b) => String(b.last_message_timestamp || '').localeCompare(String(a.last_message_timestamp || '')))
++      .slice(0, 6).map(chatItem);
++    return Response.json({ results: list });
++  }
++
++  if (body.action === 'hoy') {
++    const [open, pending, failed] = await Promise.all([
++      sr.Conversations.filter({ status: 'open' }).catch(() => []),
++      sr.Conversations.filter({ status: 'pending' }).catch(() => []),
++      sr.FailedSend.filter({ status: { $in: ['pending', 'retrying', 'dead', 'hold'] } }).catch(() => []),
++    ]);
++    const list = [...rows(open), ...rows(pending)].filter(waiting)
++      .sort((a, b) => String(a.last_customer_message_at).localeCompare(String(b.last_customer_message_at)));
++    const since = Date.now() - 48 * 3600000;
++    const recentFailed = rows(failed).filter((f) => Date.parse(f.updated_date || f.created_date || 0) >= since);
++    return Response.json({
++      esperando: { count: list.length, items: list.slice(0, 8).map(chatItem), url: `${BASE}/esperando` },
++      fallidos: {
++        count: recentFailed.length,
++        items: recentFailed.slice(0, 5).map((f) => ({ app: 'whatsapp', type: 'fallido', id: f.id, title: f.to_phone || 'Envío', subtitle: [f.purpose, f.error_title].filter(Boolean).join(' · '), url: `${BASE}/logs` })),
++      },
++    });
++  }
++
++  return Response.json({ error: 'bad_action' }, { status: 400 });
++});
+diff --git a/src/pages/Conversaciones.jsx b/src/pages/Conversaciones.jsx
+index 2135cf5..4906771 100644
+--- a/src/pages/Conversaciones.jsx
++++ b/src/pages/Conversaciones.jsx
+@@ -117,7 +117,8 @@ export default function Conversaciones() {
+     const init = async () => {
+       try {
+         const convs = await loadConversations();
+-        const stateConvId = location.state?.convId;
++        // ?conv=<id> lets Mostrador (audit B-47) open one chat directly.
++        const stateConvId = location.state?.convId || new URLSearchParams(location.search).get('conv');
+         if (stateConvId) {
+           const found = convs.find(c => c.id === stateConvId);
+           if (found) {
+-- 
+2.43.0
+

@@ -1,0 +1,63 @@
+/* Panel «Hoy» + buscador (auditoría B-47). Usa los colores de mostrador.css (.mo). */
+.hoy { display: grid; gap: 14px; padding-bottom: 32px; }
+.hoy-login {
+  justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 999px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer;
+}
+.hoy-login:hover { border-color: var(--ink-3); }
+
+.hoy-search { position: relative; }
+.hoy-input {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: 12px; padding: 0 14px;
+  color: var(--ink-3);
+}
+.hoy-input:focus-within { border-color: var(--ink); }
+.hoy-input input {
+  flex: 1; min-width: 0; height: 50px; border: 0; outline: none; background: transparent;
+  color: var(--ink); font: inherit; font-size: 1rem;
+}
+.hoy-input kbd {
+  font-family: var(--mono); font-size: 0.8rem; border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: 6px; padding: 1px 7px;
+}
+.hoy-results {
+  margin-top: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 6px;
+}
+.hoy-results ul, .hoy-card ul { list-style: none; margin: 0; padding: 0; }
+
+.hoy-head { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.hoy-refresh {
+  display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; cursor: pointer;
+  color: var(--ink-3); font: inherit; font-size: 0.82rem; font-variant-numeric: tabular-nums;
+}
+.hoy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.hoy-card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 12px 10px;
+  display: grid; gap: 6px; align-content: start; min-width: 0;
+}
+.hoy-card[data-tone='warn'] { border-left: 4px solid #c27c0e; }
+.hoy-card[data-tone='ok'] { border-left: 4px solid #2f8a57; }
+.hoy-card[data-tone='info'] { border-left: 4px solid var(--line); }
+.hoy-card header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.hoy-card h4 { margin: 0; font-size: 0.9rem; font-weight: 600; }
+.hoy-num { font-family: var(--mono); font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hoy-note { margin: 0; color: var(--ink-3); font-size: 0.82rem; }
+.hoy-err { margin: 0; color: #b42318; font-size: 0.82rem; }
+.hoy-more { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2); font-size: 0.82rem; font-weight: 600; }
+
+.hoy-item { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; min-width: 0; }
+.hoy-item:hover { background: var(--paper); }
+.hoy-item > svg { margin-left: auto; color: var(--ink-3); flex: none; }
+.hoy-item-txt { min-width: 0; display: grid; }
+.hoy-item-txt b { font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hoy-item-txt span { color: var(--ink-3); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hoy-dot { width: 8px; height: 8px; border-radius: 2px; flex: none; background: var(--ink-3); }
+.hoy-dot[data-app='reparo'] { background: var(--reparo); }
+.hoy-dot[data-app='whatsapp'] { background: var(--whatsapp); }
+.hoy-dot[data-app='tpv'] { background: var(--tpv); }
+
+.hoy-spin { animation: hoy-spin 1s linear infinite; }
+@keyframes hoy-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .hoy-spin { animation: none; } }
