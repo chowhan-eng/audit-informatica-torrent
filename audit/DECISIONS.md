@@ -24,6 +24,16 @@ Decisions are recorded here as they are taken. Nothing below has been executed y
 | D-11 | Tarjeta SIM / Bandeja SIM only for phones and tablets? | **Yes.** | Make both fields conditional (backlog, Reparo). |
 | D-12 | Real shop hours | **Mon–Fri 09:30–14:00 and 17:00–20:30; Sat 10:00–14:00; Sun closed.** | **Matches the configured `shop_hours` in WhatsApp Pro** → Phase 1 finding 11 closed, no change needed there. AUDIT.md §2 hours (09–14 / 16–21) are outdated. Unblocks D-04 "Horario" text. All schedules in Phase 7 use these hours. |
 
+## 2026-10-30 — Phase 7 answers
+
+| # | Question | Decision (Joney, in chat) | Effect on the plan |
+|---|---|---|---|
+| D-13 | Message drafts | **Approved: T-01 to T-05 and T-07 to T-10.** Completed by Joney: Ubicación link `https://maps.google.com/?q=Calle+Germanies+74+Torrent`; parking "Parking público Metro Torrent Avinguda o zona azul cercana"; mail-in packaging "Proteger el dispositivo con plástico de burbujas en caja rígida ajustada; no incluir cables, fundas ni tarjetas SIM/SD salvo que se soliciten explícitamente para el diagnóstico." | T-07 and T-10 placeholders filled with Joney's text. Texts go live only in the implementation batch, after shadow week (automations.md §6). |
+| D-14 | Final custody notice (T-06) | **The gestoría provides the final legal clause** (Código Civil / deposit rules). | T-06 blocked until the clause arrives; A-03 final notice stays off until then. Day 3/7/15 reminders can go live before it. |
+| D-15 | Morning brief channel | **E-mail only. No WhatsApp sends for internal system notifications.** | A-10 e-mail only. Health check (A-12) → push + e-mail, no WhatsApp. Saves the internal-WhatsApp line in the cost table. **To confirm:** the 13:00 Pendientes WhatsApp to Japji (A-09a) is a staff task list, not a system notice — keep it by WhatsApp, or move it to e-mail/push? |
+| D-16 | Unanswered chats > 60 min | **Centralise all operational alerts to the shop's main / administrator number; remove duplicate escalations to the same phone.** | One escalation level only (the 30-min and 60-min levels today both go to the same phone). **Open:** which number is "the main number"? The shop's WhatsApp Business number (+34 601 110 325) cannot message itself, so the recipient must be another phone — Joney to give it in chat (not invented). Under D-15 this alert could also be push/e-mail only — Joney to confirm. |
+| D-17 | Review page on netlify | **Remove the intermediate link completely. Send review requests only to the official Google Business Profile link, with no satisfaction pre-filter.** | Setting `review_redirect_url` to be cleared; `review_url` (g.page/r/…) is the only link. Together with SEC-06 (consent) before A-07 goes live. |
+
 ### Open from D-04 (for Joney)
 - Confirm the real opening hours (Mon–Fri 09–14 / 16–21? Saturday hours?) so the "Horario" text and `shop_hours` can be fixed in one go.
 - Confirm the "Cómo llegar" content (address is known: C/ Germanies 74 bajo, 46900 Torrent; parking/transport details only if Joney provides them).
