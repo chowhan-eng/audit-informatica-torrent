@@ -11,12 +11,12 @@
 - **Production heads (unchanged):** WhatsApp Pro 8d595b9, Reparo 686fe92, TPV bf4c563.
 
 ## Status
-- 2 LIVE, 35 READY, 8 WAITING (Joney / gestoría / platform), 19 TODO.
+- 2 LIVE, 43 READY, 8 WAITING (Joney / gestoría / platform), 11 TODO.
 - 31 Oct extras done: D-40 FRP, D-41 tutorials (KB JSON), D-42 voice alert + Asistente page.
 - **Not done** in the 31 Oct batch: loading the new KB entries into the production table. A data write takes effect immediately, so it is left for the deploy (file: `projects/extra-wizard-voz-frp/kb/`).
 
 ## TODO items (not programmed yet)
-B-25, B-26, B-27, B-28, B-29, B-30, B-31, B-32, B-36, B-45, B-46, B-48, B-50, B-51, B-52, B-53, B-59, B-63, B-64
+B-31, B-36, B-45, B-46, B-48, B-50, B-51, B-52, B-53, B-63, B-64
 
 How to do each one: see `audit/BACKLOG.csv` (acceptance criteria). Read only the files you need with targeted greps; put the code in `audit/impl/projects/<item>/` (new files + anchored patch script); WhatsApp Pro changes as a new `00NN` patch.
 
@@ -24,3 +24,5 @@ How to do each one: see `audit/BACKLOG.csv` (acceptance criteria). Read only the
 1. B-03 token (Joney) → test to +34 658 … 734.
 2. `audit/impl/DEPLOY.md` step by step (WhatsApp Pro patches 0001–0013; Reparo also gets `projects/extra-wizard-voz-frp`).
 3. One week later: `reminders_live=true`, `library_autoreply_mode=live`, `retention_live=true`.
+
+- New secret for batch-tpv-reparo-1031: `DOC_LINK_SECRET` (TPV). Add it to DEPLOY.md §2 at deploy time.

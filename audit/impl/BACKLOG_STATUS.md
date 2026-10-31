@@ -32,14 +32,14 @@ Legend:
 | B-22 13:00 digest Mon–Sat, all, retry | READY | |
 | B-23 one escalation level | READY | |
 | B-24 parts notices + 💬 | READY | create status "Pieza recibida" |
-| B-25 SIM fields only for phones | TODO | |
-| B-26 Informes 3,000-product cap | TODO | |
-| B-27 TPV phone search +34 | TODO | |
-| B-28 catalogue load retry | TODO | |
-| B-29 signed expiring PDFs | TODO | |
-| B-30 atomic Reparo order number | TODO | |
+| B-25 SIM fields only for phones | READY | projects/batch-tpv-reparo-1031 |
+| B-26 Informes 3,000-product cap | READY | projects/batch-tpv-reparo-1031 |
+| B-27 TPV phone search +34 | READY | projects/batch-tpv-reparo-1031 |
+| B-28 catalogue load retry | READY | projects/batch-tpv-reparo-1031 |
+| B-29 signed expiring PDFs | READY | projects/batch-tpv-reparo-1031 |
+| B-30 atomic Reparo order number | READY | projects/batch-tpv-reparo-1031 |
 | B-31 Estado pages into source | TODO | |
-| B-32 cash-close reminder | TODO | |
+| B-32 cash-close reminder | READY | projects/batch-tpv-reparo-1031 |
 | B-33 FailedSend coverage | READY | WhatsApp Pro 0012 (async Meta failures) |
 | B-34 KB contradictions + prices | WAITING | Joney's prices |
 | B-35 invite-only registration | WAITING | platform setting at deploy |
@@ -66,11 +66,11 @@ Legend:
 | B-56 duplicates report | READY | WhatsApp Pro 0013 (Reparo/TPV reports TODO) |
 | B-57 PII out of logs | READY | WhatsApp Pro 0013 |
 | B-58 unused secrets | WAITING | platform action at deploy |
-| B-59 hide TPV compras/proveedores/unidades | TODO | |
+| B-59 hide TPV compras/proveedores/unidades | READY | projects/batch-tpv-reparo-1031 |
 | B-60 archive 8 apps | WAITING | platform action, Joney's OK |
 | B-61 separate keys per direction | READY | constant-time compare done; separate keys TODO |
 | B-62 delete dead code | WAITING | 30 days after deploy; list ready |
 | B-63 /tpv deposit | TODO | low priority (D-06) |
 | B-64 misc Phase 3 fixes | TODO | |
 
-**Counts (64 items):** 2 LIVE · 35 READY · 8 WAITING · 19 TODO. Plus the 31 Oct extras (D-40…D-42).
+**Counts (64 items):** 2 LIVE · 43 READY · 8 WAITING · 11 TODO. Plus the 31 Oct extras (D-40…D-42).

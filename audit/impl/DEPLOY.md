@@ -29,6 +29,8 @@ Values are new random strings generated at apply time; never reuse one value for
 | `REPARO_TPV_URL` | TPV | URL of Reparo `tpvBridge` |
 | `MOSTRADOR_KEY` | Mostrador + Reparo + TPV + WhatsApp Pro (same value) | B-47 |
 | `MOSTRADOR_REPARO_URL`, `MOSTRADOR_TPV_URL`, `MOSTRADOR_WA_URL` | Mostrador | URLs of each `mostradorLookup` |
+| `DOC_LINK_SECRET` | TPV | B-29 signed 7-day document links |
+| `BRIEF_EMAILS` (optional) | Mostrador | B-43/B-44 e-mail recipients |
 | `MOSTRADOR_STAFF` (optional) | Mostrador | emails of staff allowed besides admins |
 
 `INTERNAL_CALL_KEY` already exists (B-01). Setting secrets redeploys every function of that app from main, so set them **after** that app's code is in main.
@@ -74,6 +76,8 @@ Copy `files/` and run the scripts, in this order, each with `--check` first:
 7. `B-39-B-55` (`--tpv`).
 8. `cleanup` (`--tpv`).
 9. `B-09` (TPV files).
+
+**Last for Reparo and TPV:** `projects/extra-wizard-voz-frp` (Reparo), then `projects/batch-tpv-reparo-1031` (both). WhatsApp Pro: patches 0001–0013.
 
 ### Mostrador
 `B-47` (`--mostrador` + files). Then set the app to **invite-only** (B-35) before anyone opens the panel.
