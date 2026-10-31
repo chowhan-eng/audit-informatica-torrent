@@ -77,7 +77,7 @@ Copy `files/` and run the scripts, in this order, each with `--check` first:
 8. `cleanup` (`--tpv`).
 9. `B-09` (TPV files).
 
-**Last for Reparo and TPV:** `projects/extra-wizard-voz-frp` (Reparo), then `projects/batch-tpv-reparo-1031` (both). WhatsApp Pro: patches 0001–0013.
+**Last for Reparo and TPV:** `projects/extra-wizard-voz-frp` (Reparo), then `projects/batch-tpv-reparo-1031` (both). Then B-45-mensajeria, B-48-catalogo-cache, B-50-busqueda-reparo and B-51-B-53-B-31 (last). WhatsApp Pro: patches 0001–0015.
 
 ### Mostrador
 `B-47` (`--mostrador` + files). Then set the app to **invite-only** (B-35) before anyone opens the panel.

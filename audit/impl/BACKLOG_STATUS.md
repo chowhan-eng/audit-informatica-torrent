@@ -38,7 +38,7 @@ Legend:
 | B-28 catalogue load retry | READY | projects/batch-tpv-reparo-1031 |
 | B-29 signed expiring PDFs | READY | projects/batch-tpv-reparo-1031 |
 | B-30 atomic Reparo order number | READY | projects/batch-tpv-reparo-1031 |
-| B-31 Estado pages into source | TODO | |
+| B-31 Estado pages into source | READY | projects/B-51-B-53-B-31 (estado.html ready; resena.html to fetch from live host) |
 | B-32 cash-close reminder | READY | projects/batch-tpv-reparo-1031 |
 | B-33 FailedSend coverage | READY | WhatsApp Pro 0012 (async Meta failures) |
 | B-34 KB contradictions + prices | WAITING | Joney's prices |
@@ -52,15 +52,15 @@ Legend:
 | B-42 budget reminder 24 h | READY | 72 h staff alert = Hoy panel list |
 | B-43 morning brief e-mail | READY | Mostrador morningBrief |
 | B-44 health check | READY | Mostrador healthCheck |
-| B-45 mail-in process | TODO | T-07 approved |
-| B-46 KB pipeline | TODO | |
+| B-45 mail-in process | READY | WhatsApp Pro 0014 + projects/B-45-mensajeria (statuses/fields = data step) |
+| B-46 KB pipeline | READY | anonymiser before the LLM (WhatsApp Pro 0015); review queue/metrics TODO |
 | B-47 Mostrador Hoy + search | READY | |
-| B-48 TPV catalogue cache | TODO | |
+| B-48 TPV catalogue cache | READY | projects/B-48-catalogo-cache |
 | B-49 WhatsApp Pro code-split | READY | WhatsApp Pro 0012 |
-| B-50 Reparo search fast path | TODO | |
-| B-51 events append-only | TODO | |
+| B-50 Reparo search fast path | READY | projects/B-50-busqueda-reparo (tab-counts endpoint TODO) |
+| B-51 events append-only | READY | projects/B-51-B-53-B-31 (re-read before write) |
 | B-52 shared helpers | TODO | |
-| B-53 audit-log gaps | TODO | |
+| B-53 audit-log gaps | READY | projects/B-51-B-53-B-31 (logs not editable) |
 | B-54 GDPR procedure + retention | READY | retention part (unlock codes, lookup log); written procedure TODO |
 | B-55 TPV PIN server-side + cajero | READY | who is cajero: Joney (D-35) |
 | B-56 duplicates report | READY | WhatsApp Pro 0013 (Reparo/TPV reports TODO) |
@@ -70,7 +70,7 @@ Legend:
 | B-60 archive 8 apps | WAITING | platform action, Joney's OK |
 | B-61 separate keys per direction | READY | constant-time compare done; separate keys TODO |
 | B-62 delete dead code | WAITING | 30 days after deploy; list ready |
-| B-63 /tpv deposit | TODO | low priority (D-06) |
-| B-64 misc Phase 3 fixes | TODO | |
+| B-63 /tpv deposit | SKIPPED | D-06: no deposits are taken; revisit only if that changes |
+| B-64 misc Phase 3 fixes | READY | checked: Reparo status errors already show a toast (StatusSelect), WhatsApp Pro draft errors already show a toast; no change needed |
 
-**Counts (64 items):** 2 LIVE · 43 READY · 8 WAITING · 11 TODO. Plus the 31 Oct extras (D-40…D-42).
+**Counts (64 items):** 2 LIVE · 51 READY · 8 WAITING · 2 TODO · 1 SKIPPED. Plus the 31 Oct extras (D-40…D-42).

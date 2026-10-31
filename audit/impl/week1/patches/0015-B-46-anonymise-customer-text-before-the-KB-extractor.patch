@@ -1,0 +1,53 @@
+From ef60c071d7e476d25909c09c5333a57e4fd34209 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 31 Oct 2026 11:09:50 +0000
+Subject: [PATCH] B-46 anonymise customer text before the KB extractor LLM
+
+LOCAL ONLY - not pushed, not deployed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/functions/autoKBExtract/entry.ts | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/base44/functions/autoKBExtract/entry.ts b/base44/functions/autoKBExtract/entry.ts
+index 8d73be6..f5314cf 100644
+--- a/base44/functions/autoKBExtract/entry.ts
++++ b/base44/functions/autoKBExtract/entry.ts
+@@ -174,10 +174,10 @@ Deno.serve(async (req) => {
+ 
+         // Build transcript: context lines clearly marked, new lines for extraction
+         const contextLines = contextMsgs.map(m =>
+-          `[CONTEXTO - NO EXTRAER] ${m.sender_type === 'customer' ? 'Cliente' : 'Agente'}: ${m.message_body}`
++          `[CONTEXTO - NO EXTRAER] ${m.sender_type === 'customer' ? 'Cliente' : 'Agente'}: ${anonymize(m.message_body)}`
+         );
+         const newLines = newMsgs.map(m =>
+-          `${m.sender_type === 'customer' ? 'Cliente' : 'Agente'}: ${m.message_body}`
++          `${m.sender_type === 'customer' ? 'Cliente' : 'Agente'}: ${anonymize(m.message_body)}`
+         );
+         const transcript = [...contextLines, ...newLines].join('\n');
+ 
+@@ -356,6 +356,19 @@ function isWithinBusinessHours(settings, d = new Date()) {
+ // — base44/functions/_shared/llmFree.ts exists but no function imports it (cross-
+ // function imports are unconfirmed/unworking in this runtime), so keep all copies
+ // in sync if this logic ever changes.
++// Audit B-46 / SEC-19: nothing that identifies a customer reaches the LLM. Phones,
++// e-mails, DNI/NIE, IBAN/cards, order numbers and greetings with a name are replaced.
++function anonymize(text: string): string {
++  return String(text || '')
++    .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[email]')
++    .replace(/\b[A-Z]{2}\d{2}(?:\s?\d{4}){4,6}\b/gi, '[iban]')
++    .replace(/\b(?:\d[ -]?){13,19}\b/g, '[numero]')
++    .replace(/\b[XYZ]?\d{7,8}[A-Z]\b/gi, '[dni]')
++    .replace(/\+?\d[\d\s().-]{7,}\d/g, '[telefono]')
++    .replace(/#\s?\d{3,7}\b/g, '#[orden]')
++    .replace(/\b([Hh]ola|[Bb]uenas|[Ss]oy|[Mm]e llamo|[Gg]racias)\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)?/g, '$1 [nombre]');
++}
++
+ async function invokeLLM(base44: any, args: any): Promise<any> {
+   return await callModel(base44, args, 'autoKBExtract');
+ }
+-- 
+2.43.0
+
