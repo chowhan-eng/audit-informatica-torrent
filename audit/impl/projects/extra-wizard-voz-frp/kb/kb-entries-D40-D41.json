@@ -1,0 +1,14 @@
+[
+  {
+    "topic_key": "frp_cuenta_google",
+    "title": "Quitar cuenta de Google (FRP)",
+    "automation_level": "draft",
+    "answer_es": "Sí, quitamos la cuenta de Google (FRP) del teléfono. Hay que traerlo a la tienda: tomamos sus datos completos (nombre, DNI y teléfono) y usted firma que es el propietario y asume la responsabilidad. El diagnóstico es gratuito. C/ Germanies 74 bajo, Torrent."
+  },
+  {
+    "topic_key": "tutorial_youtube",
+    "title": "Tutoriales en vídeo",
+    "automation_level": "draft",
+    "answer_es": "No facilitamos juegos ni descargas, pero le podemos enviar un tutorial de YouTube que explica cómo hacerlo paso a paso: {enlace_youtube}"
+  }
+]

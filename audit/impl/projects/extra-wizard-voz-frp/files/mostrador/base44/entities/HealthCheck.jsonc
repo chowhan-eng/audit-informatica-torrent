@@ -1,0 +1,49 @@
+{
+  "name": "HealthCheck",
+  "type": "object",
+  "description": "Resultados del control de salud (B-44).",
+  "properties": {
+    "at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "problems": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "alerted": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "at"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

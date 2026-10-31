@@ -1,0 +1,45 @@
+{
+  "name": "Conservación de datos (domingo 04:10)",
+  "description": "B-54: contraseñas de equipos 30 días tras la entrega; consultas públicas 7 días. En prueba hasta retention_live=true.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "10 4 * * 0",
+      "one_time_date": null,
+      "timezone": "Europe/Madrid",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "retentionsweep",
+      "namespace": "base44",
+      "version": "1.0"
+    },
+    "do": [
+      {
+        "run": {
+          "call": "invoke_backend_function",
+          "then": "end",
+          "with": {
+            "function_name": "retentionSweep",
+            "args": {}
+          },
+          "x-base44": {
+            "title": "Conservación de datos (domingo 04:10)",
+            "description": "B-54: contraseñas de equipos 30 días tras la entrega; consultas públicas 7 días. En prueba hasta retention_live=true."
+          }
+        }
+      }
+    ]
+  }
+}

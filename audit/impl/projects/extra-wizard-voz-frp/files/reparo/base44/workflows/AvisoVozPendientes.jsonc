@@ -1,0 +1,45 @@
+{
+  "name": "Aviso de voz: equipos pendientes (11:05 y 18:05)",
+  "description": "Equipos sin recoger y presupuestos sin respuesta, por voz en WhatsApp Pro.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "5 11,18 * * 1-5",
+      "one_time_date": null,
+      "timezone": "Europe/Madrid",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "voicedigest",
+      "namespace": "base44",
+      "version": "1.0"
+    },
+    "do": [
+      {
+        "run": {
+          "call": "invoke_backend_function",
+          "then": "end",
+          "with": {
+            "function_name": "voiceDigest",
+            "args": {}
+          },
+          "x-base44": {
+            "title": "Aviso de voz: equipos pendientes (11:05 y 18:05)",
+            "description": "Equipos sin recoger y presupuestos sin respuesta, por voz en WhatsApp Pro."
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+From fe938c743cc72f3cda52276f6e2a98596501c7e0 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 31 Oct 2026 10:55:09 +0000
+Subject: [PATCH] B-61: constant-time key compare in reparoBridge (local)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/functions/reparoBridge/entry.ts | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/base44/functions/reparoBridge/entry.ts b/base44/functions/reparoBridge/entry.ts
+index 279f8ca..59d7694 100644
+--- a/base44/functions/reparoBridge/entry.ts
++++ b/base44/functions/reparoBridge/entry.ts
+@@ -190,7 +190,11 @@ async function recentlySent(sr, orderId, toStatus) {
+ Deno.serve(async (req) => {
+   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
+   const expected = (Deno.env.get('REPARO_WA_KEY') || '').trim();
+-  if (!expected || req.headers.get('X-Reparo-Key') !== expected) return Response.json({ error: 'unauthorized' }, { status: 401, headers: cors });
++  // Constant-time compare (audit B-61).
++  const given = req.headers.get('X-Reparo-Key') || '';
++  let diff = given.length === expected.length ? 0 : 1;
++  for (let i = 0; i < given.length && i < expected.length; i++) diff |= given.charCodeAt(i) ^ expected.charCodeAt(i);
++  if (!expected || diff !== 0) return Response.json({ error: 'unauthorized' }, { status: 401, headers: cors });
+   const base44 = createClientFromRequest(req);
+   const sr = base44.asServiceRole.entities;
+   const body = await req.json().catch(() => ({}));
+-- 
+2.43.0
+

@@ -50,8 +50,8 @@ Legend:
 | B-40 Cobrar en TPV | READY | |
 | B-41 uncollected 3/7/15 days | READY | final notice T-06 waits for gestoría |
 | B-42 budget reminder 24 h | READY | 72 h staff alert = Hoy panel list |
-| B-43 morning brief e-mail | TODO | |
-| B-44 health check | TODO | |
+| B-43 morning brief e-mail | READY | Mostrador morningBrief |
+| B-44 health check | READY | Mostrador healthCheck |
 | B-45 mail-in process | TODO | T-07 approved |
 | B-46 KB pipeline | TODO | |
 | B-47 Mostrador Hoy + search | READY | |
@@ -59,16 +59,16 @@ Legend:
 | B-51 events append-only | TODO | |
 | B-52 shared helpers | TODO | |
 | B-53 audit-log gaps | TODO | |
-| B-54 GDPR procedure + retention | TODO | |
+| B-54 GDPR procedure + retention | READY | retention part (unlock codes, lookup log); written procedure TODO |
 | B-55 TPV PIN server-side + cajero | READY | who is cajero: Joney (D-35) |
 | B-56 duplicates report | TODO | |
 | B-57 PII out of logs | TODO | |
 | B-58 unused secrets | WAITING | platform action at deploy |
 | B-59 hide TPV compras/proveedores/unidades | TODO | |
 | B-60 archive 8 apps | WAITING | platform action, Joney's OK |
-| B-61 separate keys per direction | TODO | |
+| B-61 separate keys per direction | READY | constant-time compare done; separate keys TODO |
 | B-62 delete dead code | WAITING | 30 days after deploy; list ready |
 | B-63 /tpv deposit | TODO | low priority (D-06) |
 | B-64 misc Phase 3 fixes | TODO | |
 
-**Counts (64 items):** 2 LIVE · 25 READY (B-39 partly) · 8 WAITING · 29 TODO.
+**Counts (64 items):** 2 LIVE · 29 READY · 8 WAITING · 25 TODO. Plus the 31 Oct extras (D-40…D-42).

@@ -1,0 +1,45 @@
+{
+  "name": "Resumen de la mañana por e-mail (09:20 lun-sáb)",
+  "description": "B-43: resumen del día de Reparo, TPV y WhatsApp Pro.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "20 9 * * 1-6",
+      "one_time_date": null,
+      "timezone": "Europe/Madrid",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "morningbrief",
+      "namespace": "base44",
+      "version": "1.0"
+    },
+    "do": [
+      {
+        "run": {
+          "call": "invoke_backend_function",
+          "then": "end",
+          "with": {
+            "function_name": "morningBrief",
+            "args": {}
+          },
+          "x-base44": {
+            "title": "Resumen de la mañana por e-mail (09:20 lun-sáb)",
+            "description": "B-43: resumen del día de Reparo, TPV y WhatsApp Pro."
+          }
+        }
+      }
+    ]
+  }
+}

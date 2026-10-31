@@ -73,6 +73,14 @@ Phone numbers given by Joney are recorded masked here (this repo is shared); the
 | D-38 | B-05 public status page | **Lookup by phone requires phone + order number.** | publicStatus returns only the one order where both match, same answer for any mismatch; no client IP → refused; 10 lookups per IP and 200 in total per 10 minutes. The QR link (`#uuid`) is unchanged. estado.html gets an order-number field. Patch: `audit/impl/src/reparo` d9b5d1b. |
 | D-39 | Deploy freeze | **Zero deploys, zero secret changes, zero app restarts in Base44** until the Meta token change (B-03) is done. | All Week 1 patches stay local. Applying them follows `impl/week1/B-02-B-04-B-05-local.md`. |
 
+## 2026-10-31 — Changes by Joney
+
+| # | Topic | Decision (Joney, in chat) | Effect |
+|---|---|---|---|
+| D-40 | FRP (replaces D-30) | **Google account removal (FRP) is done without a purchase invoice. The shop takes the customer's full details (name, DNI, phone) and the customer signs that they own the device and take responsibility.** | Drafts may explain the service. The new KB entry `frp_cuenta_google` is in `impl/projects/extra-wizard-voz-frp/kb/`. Auditor's note, recorded once: removing FRP without proof of ownership can help with stolen phones. The signed customer record is the shop's protection, so keep it. |
+| D-41 | ROMs / videos (replaces D-31) | **No games or downloads are given, but YouTube tutorial links may be sent to help the customer.** | The new KB entry `tutorial_youtube` is a draft only (B-21: auto-reply stays hours/location). There is no code filter on these topics, so nothing has to be removed. The 17 entries purged on 30 Oct cannot be restored (their content was overwritten); the new entries replace them. |
+| D-42 | Voice alert + assistant | **Voice alert twice a day about uncollected devices and unanswered budgets. "Asistente" page to review every Listo/Pendiente order one by one: Ya entregado / Avisar desde hoy / Saltar.** | `voiceDigest` 11:05 and 18:05 (Saturday only 11:05); Reparo `/asistente`. "Avisar desde hoy" sends T-04 at once and restarts the 3/7/15-day cycle. Old orders are included here by explicit decision. |
+
 ### Open from D-04 (for Joney)
 - Confirm the real opening hours (Mon–Fri 09–14 / 16–21? Saturday hours?) so the "Horario" text and `shop_hours` can be fixed in one go.
 - Confirm the "Cómo llegar" content (address is known: C/ Germanies 74 bajo, 46900 Torrent; parking/transport details only if Joney provides them).

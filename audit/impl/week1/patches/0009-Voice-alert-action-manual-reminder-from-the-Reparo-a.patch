@@ -1,0 +1,45 @@
+From 5384ba9d26e5dd114833940456b299466ffd054e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 31 Oct 2026 10:54:48 +0000
+Subject: [PATCH] Voice alert action + manual reminder from the Reparo
+ assistant (local, not deployed)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/functions/reparoBridge/entry.ts | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/base44/functions/reparoBridge/entry.ts b/base44/functions/reparoBridge/entry.ts
+index 511f902..279f8ca 100644
+--- a/base44/functions/reparoBridge/entry.ts
++++ b/base44/functions/reparoBridge/entry.ts
+@@ -244,7 +244,8 @@ Deno.serve(async (req) => {
+       const replied = (Array.isArray(convs) ? convs : []).some((c: any) => c.last_customer_message_at && c.last_customer_message_at > r.since);
+       if (replied) return Response.json({ ok: true, sent: false, skipped: 'customer_replied' }, { headers: cors });
+     }
+-    if (flat.reminders_live !== 'true') {
++    // A person pressing «Avisar desde hoy» in the Reparo assistant (manual) does not wait for the trial week.
++    if (flat.reminders_live !== 'true' && body.manual !== true) {
+       await sr.WebhookLogs.create({ level: 'info', source: 'reparoBridge', message: `shadow ${kind} #${r.id} → ${phone}`, detail: text }).catch(() => {});
+       return Response.json({ ok: true, sent: false, shadow: true }, { headers: cors });
+     }
+@@ -256,6 +257,15 @@ Deno.serve(async (req) => {
+     return Response.json({ ok: true, sent: !!data?.ok, detail: String(data?.error || data?.skipped || '') }, { headers: cors });
+   }
+ 
++  // ---- voice alert from Reparo (twice a day: uncollected devices, unanswered budgets).
++  // Joney asked for it explicitly, so it does not depend on voice_enabled.
++  if (body.action === 'voice') {
++    const text = String(body.text || '').slice(0, 400);
++    if (!text) return Response.json({ error: 'missing_text' }, { status: 400, headers: cors });
++    await sr.VoiceQueue.create({ text, kind: 'system', spoken: false }).catch(() => {});
++    return Response.json({ ok: true }, { headers: cors });
++  }
++
+   if (body.action !== 'event') return Response.json({ error: 'bad_action' }, { status: 400, headers: cors });
+ 
+   // ---- ticket event from Reparo → same behaviour as a HelloClient status change
+-- 
+2.43.0
+

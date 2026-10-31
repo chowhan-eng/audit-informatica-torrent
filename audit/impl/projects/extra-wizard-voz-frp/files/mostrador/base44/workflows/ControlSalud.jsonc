@@ -1,0 +1,45 @@
+{
+  "name": "Control de salud (cada hora en horario)",
+  "description": "B-44: comprueba que las tres apps responden; e-mail si algo falla (máx. 1 cada 3 h).",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "35 9-20 * * 1-6",
+      "one_time_date": null,
+      "timezone": "Europe/Madrid",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "healthcheck",
+      "namespace": "base44",
+      "version": "1.0"
+    },
+    "do": [
+      {
+        "run": {
+          "call": "invoke_backend_function",
+          "then": "end",
+          "with": {
+            "function_name": "healthCheck",
+            "args": {}
+          },
+          "x-base44": {
+            "title": "Control de salud (cada hora en horario)",
+            "description": "B-44: comprueba que las tres apps responden; e-mail si algo falla (máx. 1 cada 3 h)."
+          }
+        }
+      }
+    ]
+  }
+}

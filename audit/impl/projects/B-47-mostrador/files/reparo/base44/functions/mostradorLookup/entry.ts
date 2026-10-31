@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     ]);
     const recent = rows(readyRecent);
     return Response.json({
-      listos: { count: recent.length, total_open: readyAll, items: recent.slice(0, 8).map(orderItem), url: `${BASE}/tickets` },
+      listos: { count: recent.length, total_open: readyAll, items: recent.slice(0, 8).map(orderItem), url: `${BASE}/asistente` },
       presupuestos: { count: rows(budgets).length, items: rows(budgets).slice(0, 8).map(orderItem) },
       material: { count: rows(material).length, items: rows(material).slice(0, 8).map(orderItem) },
       nuevos_hoy: today,
