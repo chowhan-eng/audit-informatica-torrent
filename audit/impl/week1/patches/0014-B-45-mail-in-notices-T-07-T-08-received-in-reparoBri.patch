@@ -1,0 +1,139 @@
+From 921e4ed0b624dc189db6bac80a52e5401d989ccf Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 31 Oct 2026 11:08:14 +0000
+Subject: [PATCH] B-45 mail-in notices T-07/T-08 (+ received) in reparoBridge
+
+LOCAL ONLY - not pushed, not deployed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/functions/reparoBridge/entry.ts | 18 +++++++-
+ cls_out.cjs                            | 58 ++++++++++++++++++++++++++
+ 2 files changed, 75 insertions(+), 1 deletion(-)
+ create mode 100644 cls_out.cjs
+
+diff --git a/base44/functions/reparoBridge/entry.ts b/base44/functions/reparoBridge/entry.ts
+index 59d7694..c6c0d99 100644
+--- a/base44/functions/reparoBridge/entry.ts
++++ b/base44/functions/reparoBridge/entry.ts
+@@ -65,6 +65,10 @@ function classify(statusName) {
+   const s = norm(statusName);
+   if (s.includes('entregado') && s.includes('resena')) return 'close_review';
+   if (s.includes('entregado')) return 'close';
++  // Audit B-45 (T-07/T-08, D-20/D-34): mail-in repairs.
++  if (s.includes('mensajeria') && s.includes('recibid')) return 'mail_received';
++  if (s.includes('mensajeria')) return 'mail_in';
++  if (s.includes('enviado') && s.includes('cliente')) return 'mail_sent';
+   // Audit B-24 (T-01/T-02): parts notices.
+   if (s.includes('esperando') && s.includes('material')) return 'material';
+   if (s.includes('pieza') && s.includes('recibid')) return 'pieza_recibida';
+@@ -118,6 +122,13 @@ function buildMessage(action, t, sig) {
+     // Audit B-24, texts T-01 and T-02 approved by Joney (Phase 7).
+     case 'material':
+       return `Hola ${t.client_name}, le informamos de que para su ${dev} (Orden #${t.id}) estamos esperando una pieza. Le avisaremos por aquí en cuanto llegue. Gracias por su paciencia.${sig}`;
++    case 'mail_in':
++      return `Hola ${t.client_name}, hemos registrado su reparación por mensajería (Orden #${t.id}). Envíe el equipo con GLS o Correos Express (envío a su cargo) a: Informática Torrent, C/ Germanies 74 bajo, 46900 Torrent (Valencia). Protéjalo con plástico de burbujas en una caja rígida ajustada; no incluya cables, fundas ni tarjetas SIM/SD salvo que se las pidamos para el diagnóstico (para la modificación de Switch puede enviar su propia microSD de 128/256 GB o comprarla en tienda). Le avisaremos al recibirlo. El pago se realiza por Bizum o transferencia cuando la reparación esté terminada; la devolución la gestionamos nosotros por 10 € (o 19 € ida y vuelta si lo prefiere).${sig}`;
++    case 'mail_received':
++      return `Hola ${t.client_name}, hemos recibido su ${dev} (Orden #${t.id}). Le avisaremos por aquí con el diagnóstico.${sig}`;
++    case 'mail_sent':
++      if (!t.tracking) return null;
++      return `Hola ${t.client_name}, su ${dev} (Orden #${t.id}) ya va de camino${t.carrier ? ` con ${t.carrier}` : ''}. Número de seguimiento: ${t.tracking}. Gracias por confiar en Informática Torrent.${sig}`;
+     case 'pieza_recibida':
+       return `Hola ${t.client_name}, ya ha llegado la pieza para su ${dev} (Orden #${t.id}) y continuamos con la reparación. Le avisaremos cuando esté listo.${sig}`;
+     default:
+@@ -277,6 +288,7 @@ Deno.serve(async (req) => {
+     id: String(body.order_id || ''), client_name: String(body.customer_name || ''), client_phone: String(body.customer_phone || ''),
+     device_model: String(body.device || ''), averia: String(body.averia || ''), estimated_cost: String(body.estimated_cost || ''),
+     status_name: String(body.status || ''),
++    carrier: String(body.carrier || '').slice(0, 40), tracking: String(body.tracking || '').slice(0, 60),
+   };
+   if (!t.id) return Response.json({ error: 'missing_order_id' }, { status: 400, headers: cors });
+   const isNew = body.event === 'ticket_created';
+@@ -288,7 +300,7 @@ Deno.serve(async (req) => {
+   let action = 'voice_only'; let msgText: string | null = null; let voiceText = ''; let voiceKind = 'order'; let scheduleReview = false;
+   if (isNew) {
+     if (cls === 'nuevo') { action = 'welcome'; msgText = buildMessage('welcome', t, sig); voiceText = voiceDetail(`Nueva orden ${t.id}`, t, { withAveria: true, withPrecio: true }); voiceKind = 'new_order'; }
+-    else if (['listo_wa', 'contactar', 'presupuesto', 'iniciar', 'no_repair'].includes(cls)) { action = cls; msgText = buildMessage(cls, t, sig); voiceText = voiceDetail(`Orden ${t.id}, ${t.status_name}`, t, { withAveria: true, withPrecio: true }); }
++    else if (['listo_wa', 'contactar', 'presupuesto', 'iniciar', 'no_repair', 'mail_in'].includes(cls)) { action = cls; msgText = buildMessage(cls, t, sig); voiceText = voiceDetail(`Orden ${t.id}, ${t.status_name}`, t, { withAveria: true, withPrecio: true }); }
+     else { action = 'discovered_silent'; }
+   } else {
+     switch (cls) {
+@@ -297,6 +309,10 @@ Deno.serve(async (req) => {
+       case 'listo_wa': action = 'listo_wa'; msgText = buildMessage('listo_wa', t, sig); voiceText = voiceDetail(`Orden ${t.id} lista, enviando WhatsApp`, t, { withAveria: true, withPrecio: true }); voiceKind = 'listo'; break;
+       case 'listo_voice': action = 'voice_only'; voiceText = voiceDetail(`Orden ${t.id} lista para recoger`, t, { withAveria: true, withPrecio: true }); voiceKind = 'listo'; break;
+       case 'no_repair': action = 'no_repair'; msgText = buildMessage('no_repair', t, sig); voiceText = voiceDetail(`Orden ${t.id}, no se ha podido reparar, avisando al cliente`, t, { withAveria: true }); break;
++      case 'mail_in': case 'mail_received': case 'mail_sent':
++        action = cls; msgText = buildMessage(cls, t, sig);
++        if (!msgText) action = 'mail_sent_no_tracking';
++        break;
+       case 'material': case 'pieza_recibida':
+         action = cls; msgText = buildMessage(cls, t, sig);
+         voiceText = voiceDetail(cls === 'material' ? `Orden ${t.id}, esperando material` : `Orden ${t.id}, pieza recibida`, t);
+diff --git a/cls_out.cjs b/cls_out.cjs
+new file mode 100644
+index 0000000..c6f40b5
+--- /dev/null
++++ b/cls_out.cjs
+@@ -0,0 +1,58 @@
++"use strict";
++const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
++const collapse = (s) => String(s || '').replace(/\s+/g, ' ').trim();
++function classify(statusName) {
++    const s = norm(statusName);
++    if (s.includes('entregado') && s.includes('resena'))
++        return 'close_review';
++    if (s.includes('entregado'))
++        return 'close';
++    // Audit B-45 (T-07/T-08, D-20/D-34): mail-in repairs.
++    if (s.includes('mensajeria') && s.includes('recibid'))
++        return 'mail_received';
++    if (s.includes('mensajeria'))
++        return 'mail_in';
++    if (s.includes('enviado') && s.includes('cliente'))
++        return 'mail_sent';
++    // Audit B-24 (T-01/T-02): parts notices.
++    if (s.includes('esperando') && s.includes('material'))
++        return 'material';
++    if (s.includes('pieza') && s.includes('recibid'))
++        return 'pieza_recibida';
++    if (s.includes('no') && s.includes('reparacion'))
++        return 'no_repair';
++    if (s.includes('listo') && (s.includes('whatsapp') || s.includes('wsp')))
++        return 'listo_wa';
++    if (s.includes('listo'))
++        return 'listo_voice';
++    if (s.includes('contactar'))
++        return 'contactar';
++    if (s.includes('presupuesto') && s.includes('enviar'))
++        return 'presupuesto';
++    if (s.includes('conversaci'))
++        return 'iniciar';
++    if (s.includes('nuevo'))
++        return 'nuevo';
++    return 'other';
++}
++function readyDate(iso) {
++    const d = new Date(iso);
++    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'numeric' });
++}
++function buildReminder(kind, r, sig) {
++    const dev = r.device_model || 'dispositivo';
++    switch (kind) {
++        case 'budget_24h':
++            if (!r.estimated_cost)
++                return null;
++            return `Hola ${r.client_name}, le recordamos el presupuesto de su ${dev} (Orden #${r.id}): ${r.estimated_cost}. ¿Desea que sigamos adelante? Puede responder a este mensaje.${sig}`;
++        case 'uncollected_3':
++            return `Hola ${r.client_name}, su ${dev} (Orden #${r.id}) está listo para recoger${r.since ? ` desde el ${readyDate(r.since)}` : ''}. Le esperamos en C/ Germanies 74 bajo, Torrent. Horario: L-V 9:30-14:00 y 17:00-20:30, sáb 10:00-14:00.${sig}`;
++        case 'uncollected_7':
++        case 'uncollected_15':
++            return `Hola ${r.client_name}, le recordamos que su ${dev} (Orden #${r.id}) sigue pendiente de recoger en nuestra tienda. Si necesita que le guardemos el equipo unos días más o tiene alguna duda, responda a este mensaje.${sig}`;
++        default:
++            return null;
++    }
++}
++module.exports = { classify, buildReminder };
+-- 
+2.43.0
+

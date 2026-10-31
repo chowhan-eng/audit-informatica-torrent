@@ -6,6 +6,8 @@ export function statusMessagesCustomer(status) {
   if (String(status?.whatsapp_template || '').trim().toLowerCase() === 'no') return false;
   const s = norm(status?.name);
   if (s.includes('entregado')) return false;
+  if (s.includes('mensajeria')) return true; // B-45 mail-in statuses
+  if (s.includes('enviado') && s.includes('cliente')) return true;
   if (s.includes('esperando') && s.includes('material')) return true;
   if (s.includes('pieza') && s.includes('recibid')) return true;
   if (s.includes('no') && s.includes('reparacion')) return true;
