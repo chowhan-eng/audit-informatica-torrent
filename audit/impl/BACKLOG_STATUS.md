@@ -18,7 +18,7 @@ Legend:
 | B-08 instant off-hours ack | READY | |
 | B-09 daily backup | READY | restore test at apply time |
 | B-10 global pause | READY | TPV direct sends not covered |
-| B-11 reviews only with consent | TODO | |
+| B-11 reviews only with consent | READY | WhatsApp Pro 0011 (template link itself is set in Meta) |
 | B-12 no duplicate sales | READY | |
 | B-13 KB purge, no raw LLM | LIVE | 30 Oct |
 | B-14 Reparo card in chat | WAITING | live session (D-33) |
@@ -40,11 +40,11 @@ Legend:
 | B-30 atomic Reparo order number | TODO | |
 | B-31 Estado pages into source | TODO | |
 | B-32 cash-close reminder | TODO | |
-| B-33 FailedSend coverage | TODO | |
+| B-33 FailedSend coverage | READY | WhatsApp Pro 0012 (async Meta failures) |
 | B-34 KB contradictions + prices | WAITING | Joney's prices |
 | B-35 invite-only registration | WAITING | platform setting at deploy |
 | B-36 money writes server-only | TODO | |
-| B-37 hide stale WhatsApp Pro mirrors | TODO | |
+| B-37 hide stale WhatsApp Pro mirrors | READY | WhatsApp Pro 0011 (orderStatus → Reparo; mirrors admin-only) |
 | B-38 Crear reparación from chat | READY | |
 | B-39 roles / permissions | READY (part) | self-approval and deletes fixed; full role matrix still TODO |
 | B-40 Cobrar en TPV | READY | |
@@ -55,14 +55,16 @@ Legend:
 | B-45 mail-in process | TODO | T-07 approved |
 | B-46 KB pipeline | TODO | |
 | B-47 Mostrador Hoy + search | READY | |
-| B-48–B-50 speed (TPV cache, code-split, Reparo search) | TODO | |
+| B-48 TPV catalogue cache | TODO | |
+| B-49 WhatsApp Pro code-split | READY | WhatsApp Pro 0012 |
+| B-50 Reparo search fast path | TODO | |
 | B-51 events append-only | TODO | |
 | B-52 shared helpers | TODO | |
 | B-53 audit-log gaps | TODO | |
 | B-54 GDPR procedure + retention | READY | retention part (unlock codes, lookup log); written procedure TODO |
 | B-55 TPV PIN server-side + cajero | READY | who is cajero: Joney (D-35) |
-| B-56 duplicates report | TODO | |
-| B-57 PII out of logs | TODO | |
+| B-56 duplicates report | READY | WhatsApp Pro 0013 (Reparo/TPV reports TODO) |
+| B-57 PII out of logs | READY | WhatsApp Pro 0013 |
 | B-58 unused secrets | WAITING | platform action at deploy |
 | B-59 hide TPV compras/proveedores/unidades | TODO | |
 | B-60 archive 8 apps | WAITING | platform action, Joney's OK |
@@ -71,4 +73,4 @@ Legend:
 | B-63 /tpv deposit | TODO | low priority (D-06) |
 | B-64 misc Phase 3 fixes | TODO | |
 
-**Counts (64 items):** 2 LIVE · 29 READY · 8 WAITING · 25 TODO. Plus the 31 Oct extras (D-40…D-42).
+**Counts (64 items):** 2 LIVE · 35 READY · 8 WAITING · 19 TODO. Plus the 31 Oct extras (D-40…D-42).

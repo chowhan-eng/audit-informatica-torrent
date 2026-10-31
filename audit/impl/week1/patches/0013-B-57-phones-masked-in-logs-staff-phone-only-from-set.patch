@@ -1,0 +1,146 @@
+From 5c42fe753e321047350da6bd93781d2110637272 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 31 Oct 2026 11:03:43 +0000
+Subject: [PATCH] B-57 phones masked in logs, staff phone only from settings;
+ B-56 duplicates report (WhatsApp Pro)
+
+LOCAL ONLY - not pushed, not deployed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/functions/duplicatesReport/entry.ts    | 37 +++++++++++++++++++
+ base44/functions/escalateWaiting/entry.ts     |  2 +-
+ .../functions/ingestClientFromShop/entry.ts   |  2 +
+ base44/functions/masterTick/entry.ts          |  3 +-
+ base44/functions/sendMessage/entry.ts         |  2 +
+ base44/functions/watchdog/entry.ts            |  2 +-
+ base44/functions/whatsappWebhook/entry.ts     |  2 +
+ 7 files changed, 47 insertions(+), 3 deletions(-)
+ create mode 100644 base44/functions/duplicatesReport/entry.ts
+
+diff --git a/base44/functions/duplicatesReport/entry.ts b/base44/functions/duplicatesReport/entry.ts
+new file mode 100644
+index 0000000..eece19c
+--- /dev/null
++++ b/base44/functions/duplicatesReport/entry.ts
+@@ -0,0 +1,37 @@
++// =============================================================================
++// duplicatesReport — clientes duplicados en WhatsApp Inbox Pro (auditoría B-56).
++// Solo informa (admin): agrupa Customers por teléfono normalizado (34XXXXXXXXX) y
++// por DNI. No une nada automáticamente; para unir se usa la pantalla Clientes.
++// =============================================================================
++import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
++
++const rows = (x: any): any[] => (Array.isArray(x) ? x : (x?.items || []));
++function e164(raw: any) {
++  let d = String(raw || '').replace(/\D/g, '');
++  if (d.startsWith('0034')) d = d.slice(2);
++  if (d.length === 9) d = '34' + d;
++  return d.length >= 11 ? d : '';
++}
++
++Deno.serve(async (req) => {
++  const base44 = createClientFromRequest(req);
++  const user = await base44.auth.me().catch(() => null);
++  if (user?.role !== 'admin') return Response.json({ error: 'forbidden' }, { status: 403 });
++  const sr = base44.asServiceRole.entities;
++  const all: any[] = [];
++  for (let skip = 0; skip < 50000; skip += 500) {
++    const page = rows(await sr.Customers.filter({}, 'created_date', 500, skip, ['id', 'full_name', 'phone_number', 'raw_phone', 'dni', 'created_date']));
++    all.push(...page);
++    if (page.length < 500) break;
++  }
++  const group = (key: (c: any) => string) => {
++    const m = new Map<string, any[]>();
++    for (const c of all) { const k = key(c); if (k) m.set(k, [...(m.get(k) || []), c]); }
++    return [...m.entries()].filter(([, list]) => list.length > 1)
++      .map(([k, list]) => ({ key: k, count: list.length, customers: list.map((c) => ({ id: c.id, name: c.full_name || '', created: c.created_date })) }))
++      .sort((a, b) => b.count - a.count);
++  };
++  const byPhone = group((c) => e164(c.phone_number || c.raw_phone));
++  const byDni = group((c) => String(c.dni || '').toUpperCase().replace(/[^0-9A-Z]/g, ''));
++  return Response.json({ scanned: all.length, by_phone: { groups: byPhone.length, top: byPhone.slice(0, 100) }, by_dni: { groups: byDni.length, top: byDni.slice(0, 100) } });
++});
+diff --git a/base44/functions/escalateWaiting/entry.ts b/base44/functions/escalateWaiting/entry.ts
+index a4196cc..0705f79 100644
+--- a/base44/functions/escalateWaiting/entry.ts
++++ b/base44/functions/escalateWaiting/entry.ts
+@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
+ 
+     const lvl1 = parseInt(s.escalation_minutes_1 || '30', 10);
+     const lvl2 = parseInt(s.escalation_minutes_2 || '60', 10);
+-    const fallbackPhone = (s.watchdog_phone || '34658273734').replace(/\D/g, '');
++    const fallbackPhone = (s.watchdog_phone || '').replace(/\D/g, '');
+     const phone1 = (s.escalation_phone_1 || fallbackPhone).replace(/\D/g, '');
+     const phone2 = (s.escalation_phone_2 || fallbackPhone).replace(/\D/g, '');
+     const dryRun = s.escalation_dry_run === 'true';
+diff --git a/base44/functions/ingestClientFromShop/entry.ts b/base44/functions/ingestClientFromShop/entry.ts
+index 81c2886..430449a 100644
+--- a/base44/functions/ingestClientFromShop/entry.ts
++++ b/base44/functions/ingestClientFromShop/entry.ts
+@@ -232,5 +232,7 @@ function normalizePhone(raw) {
+ }
+ 
+ async function log(db, level, source, message, detail) {
++  /* B-57 */ const _mask = (_v: any) => String(_v ?? '').replace(/\+?\d{5,}(\d{3})/g, '•••$1');
++  message = _mask(message); detail = _mask(detail);
+   try { await db.entities.WebhookLogs.create({ level, source, message, detail: String(detail).slice(0, 4000) }); } catch {}
+ }
+\ No newline at end of file
+diff --git a/base44/functions/masterTick/entry.ts b/base44/functions/masterTick/entry.ts
+index 5b5825c..9627b81 100644
+--- a/base44/functions/masterTick/entry.ts
++++ b/base44/functions/masterTick/entry.ts
+@@ -171,7 +171,8 @@ async function alertOwner(sr: any, settings: any, flat: Record<string, string>,
+     if (Date.now() - last < 2 * 60 * 60 * 1000) return;
+     const token = Deno.env.get('META_ACCESS_TOKEN') || '';
+     const pnid = Deno.env.get('META_PHONE_ID') || '';
+-    const to = (flat.watchdog_phone || '34658273734').replace(/\D/g, '');
++    const to = (flat.watchdog_phone || '').replace(/\D/g, '');
++    if (!to) return; // B-57: the staff phone lives only in settings (watchdog_phone)
+     await fetch(`https://graph.facebook.com/${flat.meta_graph_version || 'v23.0'}/${pnid}/messages`, {
+       method: 'POST',
+       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+diff --git a/base44/functions/sendMessage/entry.ts b/base44/functions/sendMessage/entry.ts
+index dc5e3ea..19e387f 100644
+--- a/base44/functions/sendMessage/entry.ts
++++ b/base44/functions/sendMessage/entry.ts
+@@ -671,5 +671,7 @@ function guessMime(mediaType) {
+ }
+ 
+ async function log(db, level, source, message, detail) {
++  /* B-57 */ const _mask = (_v: any) => String(_v ?? '').replace(/\+?\d{5,}(\d{3})/g, '•••$1');
++  message = _mask(message); detail = _mask(detail);
+   try { await db.entities.WebhookLogs.create({ level, source, message, detail: String(detail).slice(0, 4000) }); } catch {}
+ }
+\ No newline at end of file
+diff --git a/base44/functions/watchdog/entry.ts b/base44/functions/watchdog/entry.ts
+index 7540081..136f61b 100644
+--- a/base44/functions/watchdog/entry.ts
++++ b/base44/functions/watchdog/entry.ts
+@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
+ 
+   const token = Deno.env.get('META_ACCESS_TOKEN') || '';
+   const pnid = Deno.env.get('META_PHONE_ID') || '';
+-  const to = sv(settings, 'watchdog_phone', '34658273734').replace(/\D/g, '');
++  const to = sv(settings, 'watchdog_phone', '').replace(/\D/g, '');
+ 
+   const res = await fetch(`https://graph.facebook.com/${META_VERSION}/${pnid}/messages`, {
+     method: 'POST',
+diff --git a/base44/functions/whatsappWebhook/entry.ts b/base44/functions/whatsappWebhook/entry.ts
+index 2653ba6..444e109 100644
+--- a/base44/functions/whatsappWebhook/entry.ts
++++ b/base44/functions/whatsappWebhook/entry.ts
+@@ -668,6 +668,8 @@ async function getMetaToken(_db: any): Promise<string> {
+ }
+ 
+ async function safeLog(db: any, level: string, source: string, message: string, detail: string) {
++  /* B-57 */ const _mask = (_v: any) => String(_v ?? '').replace(/\+?\d{5,}(\d{3})/g, '•••$1');
++  message = _mask(message); detail = _mask(detail);
+   try { await db.entities.WebhookLogs.create({ level, source, message, detail: detail.slice(0, 4000) }); } catch { /* noop */ }
+ }
+ 
+-- 
+2.43.0
+

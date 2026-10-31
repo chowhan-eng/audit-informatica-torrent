@@ -1,0 +1,122 @@
+From 74c0afe5b6bcc2882568f6f95716b9b1bf203d2a Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 31 Oct 2026 11:02:51 +0000
+Subject: [PATCH] B-33 Meta async failures into FailedSend; B-49 lazy-load
+ secondary screens
+
+LOCAL ONLY - not pushed, not deployed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/functions/whatsappWebhook/entry.ts | 15 +++++++
+ src/App.jsx                               | 50 ++++++++++++-----------
+ 2 files changed, 42 insertions(+), 23 deletions(-)
+
+diff --git a/base44/functions/whatsappWebhook/entry.ts b/base44/functions/whatsappWebhook/entry.ts
+index a104a92..2653ba6 100644
+--- a/base44/functions/whatsappWebhook/entry.ts
++++ b/base44/functions/whatsappWebhook/entry.ts
+@@ -642,6 +642,21 @@ async function handleStatus(db: any, st: any) {
+   if (status === 'failed' && Array.isArray(st.errors)) {
+     await safeLog(db, 'error', 'whatsappWebhook',
+       `Delivery failed to ${st.recipient_id} (code ${st.errors[0]?.code})`, JSON.stringify(st.errors));
++    // Audit B-33: Meta reports some failures only later (e.g. 131026 undeliverable, 131047
++    // window closed). They now land in FailedSend so they appear in the Hoy panel and brief;
++    // no automatic retry (the message already reached Meta once). One row per message.
++    const code = String(st.errors[0]?.code || '');
++    const existingFail = await db.entities.FailedSend.filter({ retry_data: JSON.stringify({ meta_message_id: metaId }) }).catch(() => []);
++    if (!(Array.isArray(existingFail) && existingFail.length)) {
++      await db.entities.FailedSend.create({
++        to_phone: String(st.recipient_id || ''), conversation_id: row?.conversation_id || null, purpose: 'status',
++        retry_data: JSON.stringify({ meta_message_id: metaId }),
++        error_code: code, error_title: String(st.errors[0]?.title || st.errors[0]?.message || '').slice(0, 200),
++        error_detail: JSON.stringify(st.errors).slice(0, 2000),
++        classification: ['131047', '131042'].includes(code) ? 'hold' : 'permanent',
++        attempts: 0, next_retry_at: null, status: ['131047', '131042'].includes(code) ? 'hold' : 'dead',
++      }).catch(() => {});
++    }
+   }
+ }
+ 
+diff --git a/src/App.jsx b/src/App.jsx
+index c956233..5682c42 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -9,32 +9,34 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+ import Layout from '@/components/Layout';
+ 
+ // Pages
++import { lazy, Suspense } from 'react';
++// Audit B-49: screens other than the inbox load on demand (smaller first bundle).
+ import Dashboard from '@/pages/Dashboard';
+ import Conversaciones from '@/pages/Conversaciones';
+-import Clientes from '@/pages/Clientes';
+-import Campanas from '@/pages/Campanas';
+-import Pedidos from '@/pages/Pedidos';
+-import PedidoDetalle from '@/pages/PedidoDetalle';
+-import PedidoNuevo from '@/pages/PedidoNuevo';
+-import Ventas from '@/pages/Ventas';
+-import Inventario from '@/pages/Inventario';
+-import Tareas from '@/pages/Tareas';
+-import Taller from '@/pages/Taller';
+-import ImportarHelloClient from '@/pages/ImportarHelloClient';
+-import BaseConocimiento from '@/pages/BaseConocimiento';
+-import RespuestasRapidas from '@/pages/RespuestasRapidas';
+-import Plantillas from '@/pages/Plantillas';
+-import Chatbot from '@/pages/Chatbot';
+-import Ajustes from '@/pages/Ajustes';
+-import Logs from '@/pages/Logs';
+-import ImportarHistorial from '@/pages/ImportarHistorial';
+-import RevisionKB from '@/pages/RevisionKB';
+-import RespuestasAutomaticas from '@/pages/RespuestasAutomaticas';
+-import Triaje from '@/pages/Triaje';
++const Clientes = lazy(() => import('@/pages/Clientes'));
++const Campanas = lazy(() => import('@/pages/Campanas'));
++const Pedidos = lazy(() => import('@/pages/Pedidos'));
++const PedidoDetalle = lazy(() => import('@/pages/PedidoDetalle'));
++const PedidoNuevo = lazy(() => import('@/pages/PedidoNuevo'));
++const Ventas = lazy(() => import('@/pages/Ventas'));
++const Inventario = lazy(() => import('@/pages/Inventario'));
++const Tareas = lazy(() => import('@/pages/Tareas'));
++const Taller = lazy(() => import('@/pages/Taller'));
++const ImportarHelloClient = lazy(() => import('@/pages/ImportarHelloClient'));
++const BaseConocimiento = lazy(() => import('@/pages/BaseConocimiento'));
++const RespuestasRapidas = lazy(() => import('@/pages/RespuestasRapidas'));
++const Plantillas = lazy(() => import('@/pages/Plantillas'));
++const Chatbot = lazy(() => import('@/pages/Chatbot'));
++const Ajustes = lazy(() => import('@/pages/Ajustes'));
++const Logs = lazy(() => import('@/pages/Logs'));
++const ImportarHistorial = lazy(() => import('@/pages/ImportarHistorial'));
++const RevisionKB = lazy(() => import('@/pages/RevisionKB'));
++const RespuestasAutomaticas = lazy(() => import('@/pages/RespuestasAutomaticas'));
++const Triaje = lazy(() => import('@/pages/Triaje'));
+ import Esperando from '@/pages/Esperando';
+-import Biblioteca from '@/pages/Biblioteca';
+-import Sudo from '@/pages/Sudo';
+-import Usuarios from '@/pages/Usuarios';
++const Biblioteca = lazy(() => import('@/pages/Biblioteca'));
++const Sudo = lazy(() => import('@/pages/Sudo'));
++const Usuarios = lazy(() => import('@/pages/Usuarios'));
+ import OnboardingForm from '@/components/auth/OnboardingForm';
+ import ApprovalGate from '@/components/auth/ApprovalGate';
+ 
+@@ -102,6 +104,7 @@ const AuthenticatedApp = () => {
+   }
+ 
+   return (
++    <Suspense fallback={<div className="flex-1" />}>
+     <Routes>
+       <Route element={<Layout />}>
+         <Route path="/" element={<Dashboard />} />
+@@ -133,6 +136,7 @@ const AuthenticatedApp = () => {
+       </Route>
+       <Route path="*" element={<PageNotFound />} />
+     </Routes>
++    </Suspense>
+   );
+ };
+ 
+-- 
+2.43.0
+

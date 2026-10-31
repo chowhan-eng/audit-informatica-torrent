@@ -1,0 +1,257 @@
+From d60f7b84929d2de0836d2e79e9bb65ed392d7e1f Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 31 Oct 2026 11:02:06 +0000
+Subject: [PATCH] B-11 review consent + 12-month cap; B-37 orderStatus forwards
+ to Reparo, stale mirrors admin-only
+
+LOCAL ONLY - not pushed, not deployed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PxgHgzYFnbNfMPgtjg9uNk
+---
+ base44/entities/DeviceUnlockCode.jsonc   | 47 +++++++-----------------
+ base44/entities/OrderState.jsonc         |  2 +-
+ base44/entities/RepairOrder.jsonc        | 47 +++++-------------------
+ base44/functions/orderStatus/entry.ts    | 42 ++++++++-------------
+ base44/functions/sendDueReviews/entry.ts | 16 ++++++++
+ 5 files changed, 56 insertions(+), 98 deletions(-)
+
+diff --git a/base44/entities/DeviceUnlockCode.jsonc b/base44/entities/DeviceUnlockCode.jsonc
+index 6048529..afe831b 100644
+--- a/base44/entities/DeviceUnlockCode.jsonc
++++ b/base44/entities/DeviceUnlockCode.jsonc
+@@ -27,47 +27,26 @@
+   ],
+   "rls": {
+     "create": {
+-      "$or": [
+-        {
+-          "user_condition": {
+-            "role": "admin"
+-          }
+-        },
+-        {
+-          "user_condition": {
+-            "role": "user"
+-          }
+-        }
+-      ]
++      "user_condition": {
++        "role": "admin"
++      }
+     },
+     "delete": {
+-      "$or": [
+-        {
+-          "user_condition": {
+-            "role": "admin"
+-          }
+-        }
+-      ]
++      "user_condition": {
++        "role": "admin"
++      }
+     },
+     "read": {
+-      "$or": [
+-        {
+-          "user_condition": {
+-            "role": "admin"
+-          }
+-        }
+-      ]
++      "user_condition": {
++        "role": "admin"
++      }
+     },
+     "update": {
+-      "$or": [
+-        {
+-          "user_condition": {
+-            "role": "admin"
+-          }
+-        }
+-      ]
++      "user_condition": {
++        "role": "admin"
++      }
+     }
+   },
+   "type": "object",
+   "name": "DeviceUnlockCode"
+-}
+\ No newline at end of file
++}
+diff --git a/base44/entities/OrderState.jsonc b/base44/entities/OrderState.jsonc
+index 41f8a5d..e666b02 100644
+--- a/base44/entities/OrderState.jsonc
++++ b/base44/entities/OrderState.jsonc
+@@ -74,4 +74,4 @@
+       }
+     }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/base44/entities/RepairOrder.jsonc b/base44/entities/RepairOrder.jsonc
+index d1440a6..adfbe8b 100644
+--- a/base44/entities/RepairOrder.jsonc
++++ b/base44/entities/RepairOrder.jsonc
+@@ -176,18 +176,9 @@
+   "type": "object",
+   "rls": {
+     "create": {
+-      "$or": [
+-        {
+-          "user_condition": {
+-            "role": "admin"
+-          }
+-        },
+-        {
+-          "user_condition": {
+-            "role": "user"
+-          }
+-        }
+-      ]
++      "user_condition": {
++        "role": "admin"
++      }
+     },
+     "read": {
+       "$or": [
+@@ -204,32 +195,14 @@
+       ]
+     },
+     "update": {
+-      "$or": [
+-        {
+-          "user_condition": {
+-            "role": "admin"
+-          }
+-        },
+-        {
+-          "user_condition": {
+-            "role": "user"
+-          }
+-        }
+-      ]
++      "user_condition": {
++        "role": "admin"
++      }
+     },
+     "delete": {
+-      "$or": [
+-        {
+-          "user_condition": {
+-            "role": "admin"
+-          }
+-        },
+-        {
+-          "user_condition": {
+-            "role": "user"
+-          }
+-        }
+-      ]
++      "user_condition": {
++        "role": "admin"
++      }
+     }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/base44/functions/orderStatus/entry.ts b/base44/functions/orderStatus/entry.ts
+index 23a3f6c..8dde045 100644
+--- a/base44/functions/orderStatus/entry.ts
++++ b/base44/functions/orderStatus/entry.ts
+@@ -6,8 +6,10 @@
+ //        device, created_at, estimated_at, shop }
+ // Only non-personal fields are returned (no customer name, phone, codes or
+ // prices), and orders can only be found by their unguessable UUID.
++//
++// Audit B-37: the RepairOrder copy in WhatsApp Pro is stale since the cutover. This now
++// forwards to Reparo's publicStatus (the single source) and returns its answer.
+ // =============================================================================
+-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.32';
+ 
+ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+ const cors = {
+@@ -16,35 +18,23 @@ const cors = {
+   'Access-Control-Allow-Headers': 'Content-Type, X-App-Id',
+ };
+ 
++const REPARO_STATUS = 'https://reparo-812bcab8.base44.app/api/apps/6ae22784825ce515812bcab8/functions/publicStatus';
++
+ Deno.serve(async (req) => {
+   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
+-  const base44 = createClientFromRequest(req);
+-  const sr = base44.asServiceRole.entities;
+   const body = await req.json().catch(() => ({}));
+   const id = String(body.id || '').trim();
+   if (!UUID.test(id)) return Response.json({ error: 'not_found' }, { status: 404, headers: cors });
+-
+-  const rows = await sr.RepairOrder.filter({ ticket_uuid: id }).catch(() => []);
+-  const o = rows[0];
+-  if (!o) return Response.json({ error: 'not_found' }, { status: 404, headers: cors });
+-
+-  let shop = { name: 'Informática Torrent', phone: '', address: '' };
+   try {
+-    const s = await sr.SystemSettings.filter({ setting_key: 'shop_company' });
+-    if (s[0]) { const c = JSON.parse(s[0].setting_value || '{}'); shop = { name: c.name || shop.name, phone: c.phone || '', address: c.address || '' }; }
+-  } catch { /* defaults */ }
+-
+-  const group = o.status_group || '';
+-  return Response.json({
+-    number: o.order_id,
+-    status: o.status_name || '',
+-    stage: group,                       // new | in_progress | ready | failed
+-    ready: group === 'ready',
+-    closed: !o.is_open || group === 'failed',
+-    device: [o.device_brand, o.device_model].filter(Boolean).join(' '),
+-    created_at: o.hc_created_at || o.created_date || null,
+-    estimated_at: o.estimated_at || null,
+-    closed_at: o.closed_at || null,
+-    shop,
+-  }, { headers: cors });
++    const r = await fetch(REPARO_STATUS, {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json', 'X-App-Id': '6ae22784825ce515812bcab8' },
++      body: JSON.stringify({ id }),
++      signal: AbortSignal.timeout(10000),
++    });
++    const data = await r.json().catch(() => ({}));
++    return Response.json(data, { status: r.status, headers: cors });
++  } catch {
++    return Response.json({ error: 'unavailable' }, { status: 503, headers: cors });
++  }
+ });
+diff --git a/base44/functions/sendDueReviews/entry.ts b/base44/functions/sendDueReviews/entry.ts
+index 8cef951..5000e17 100644
+--- a/base44/functions/sendDueReviews/entry.ts
++++ b/base44/functions/sendDueReviews/entry.ts
+@@ -238,6 +238,22 @@ Deno.serve(async (req) => {
+         continue;
+       }
+ 
++      // Audit B-11 (SEC-06, D-17): review requests are marketing. Only with the customer's
++      // marketing consent, never after an opt-out, and at most once per customer in 12 months.
++      const local = to.startsWith('34') ? to.slice(2) : to;
++      const custs = await sr.Customers.filter({ phone_number: { $in: [to, local, `+${to}`] } }).catch(() => []);
++      const cust = (Array.isArray(custs) ? custs : [])[0];
++      if (!cust || cust.marketing_consent !== true || cust.opted_out) {
++        await sr.PendingReviews.update(r.id, { sent: true, send_error: 'no_marketing_consent' });
++        continue;
++      }
++      const previous = await sr.PendingReviews.filter({ phone: r.phone, sent: true }).catch(() => []);
++      const yearAgo = Date.now() - 365 * 86400000;
++      if ((Array.isArray(previous) ? previous : []).some((p: any) => p.id !== r.id && !p.send_error && Date.parse(p.updated_date || p.created_date || 0) >= yearAgo)) {
++        await sr.PendingReviews.update(r.id, { sent: true, send_error: 'already_asked_12_months' });
++        continue;
++      }
++
+       const payload = {
+         messaging_product: 'whatsapp',
+         to,
+-- 
+2.43.0
+
