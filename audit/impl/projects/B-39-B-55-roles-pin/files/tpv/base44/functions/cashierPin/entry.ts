@@ -54,8 +54,32 @@ export default async function (req) {
       actor_email: user.email, action: 'cashier_pin', entity: 'CashierPin', entity_id: entityId, summary,
     }).catch(() => null);
 
+    const savePin = async (person, pin, pins, by) => {
+      const salt = hex(crypto.getRandomValues(new Uint8Array(16)));
+      const data = { user_id: person.id, user_email: person.email || '', pin_hash: await hashPin(pin, salt), salt, failed_attempts: 0, locked_until: '', updated_by: by };
+      const existing = pins.get(person.id);
+      if (existing) await service.entities.CashierPin.update(existing.id, data);
+      else await service.entities.CashierPin.create(data);
+    };
+    // Old plain-text PINs (User.pin) move to CashierPin the first time the list is opened,
+    // so cashiers keep their PIN after the change; the plain copy is then cleared.
+    const migrateOld = async (users, pins) => {
+      let moved = 0;
+      for (const person of users) {
+        const old = String(person.pin || '');
+        if (!old) continue;
+        if (PIN_RE.test(old) && !pins.get(person.id)?.pin_hash) { await savePin(person, old, pins, 'migracion'); moved += 1; }
+        await service.entities.User.update(person.id, { pin: '' });
+      }
+      return moved;
+    };
+
     if (action === 'list') {
       const users = itemsOf(await service.entities.User.list());
+      if (users.some((person) => person.pin)) {
+        const moved = await migrateOld(users, await pinsByUser());
+        if (moved) await audit(`PIN de cajero pasados a hash: ${moved}`);
+      }
       const pins = await pinsByUser();
       return Response.json({ users: users.map((person) => ({ ...publicUser(person), has_pin: !!pins.get(person.id)?.pin_hash })) });
     }
@@ -86,36 +110,18 @@ export default async function (req) {
 
     if (!isAdmin) return Response.json({ error: 'Sólo el encargado' }, { status: 403 });
 
-    const savePin = async (person, pin, pins) => {
-      const salt = hex(crypto.getRandomValues(new Uint8Array(16)));
-      const data = { user_id: person.id, user_email: person.email || '', pin_hash: await hashPin(pin, salt), salt, failed_attempts: 0, locked_until: '', updated_by: user.email };
-      const existing = pins.get(person.id);
-      if (existing) await service.entities.CashierPin.update(existing.id, data);
-      else await service.entities.CashierPin.create(data);
-    };
-
     if (action === 'set') {
       const pin = String(body.pin || '');
       if (!PIN_RE.test(pin)) return Response.json({ error: 'El PIN tiene 4 cifras' }, { status: 400 });
       const person = itemsOf(await service.entities.User.list()).find((item) => item.id === userId);
       if (!person) return Response.json({ error: 'Esa persona no existe' }, { status: 404 });
-      await savePin(person, pin, await pinsByUser());
+      await savePin(person, pin, await pinsByUser(), user.email);
       await audit(`PIN de cajero de ${person.email} guardado`);
       return Response.json({ ok: true });
     }
 
     if (action === 'migrate') {
-      const pins = await pinsByUser();
-      let moved = 0;
-      for (const person of itemsOf(await service.entities.User.list())) {
-        const old = String(person.pin || '');
-        if (!old) continue;
-        if (PIN_RE.test(old) && !pins.get(person.id)?.pin_hash) {
-          await savePin(person, old, pins);
-          moved += 1;
-        }
-        await service.entities.User.update(person.id, { pin: '' });
-      }
+      const moved = await migrateOld(itemsOf(await service.entities.User.list()), await pinsByUser());
       await audit(`PIN de cajero pasados a hash: ${moved}`);
       return Response.json({ ok: true, moved });
     }
