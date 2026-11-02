@@ -1,0 +1,501 @@
+<title>Torrent 360 Preview</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a framed "screen recording" of the counter app on top, scene strip + caption under it,
+   then three short reference sections (data model, before/after, switch-over weekend). */
+:root{
+  --bg:#F1F4F3; --surface:#FFFFFF; --surface2:#F7F9F8; --fg:#15201D; --muted:#5B6966; --line:#D8E0DD;
+  --accent:#1D5FD1; --accent-soft:#E2EBFB; --on-accent:#FFFFFF;
+  --ok:#1E8E50; --ok-soft:#DFF2E7; --warn:#A86A12; --warn-soft:#FAEFD9; --bad:#B93A26;
+  --shadow:0 18px 50px -24px rgba(20,40,35,.35);
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D1312; --surface:#151D1B; --surface2:#1A2321; --fg:#E5ECEA; --muted:#93A29F; --line:#283330;
+  --accent:#78A2F2; --accent-soft:#1B2742; --on-accent:#0D1312;
+  --ok:#53C487; --ok-soft:#14301F; --warn:#E3A84E; --warn-soft:#33270F; --bad:#EE7C68;
+  --shadow:0 18px 50px -24px rgba(0,0,0,.8); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D1312; --surface:#151D1B; --surface2:#1A2321; --fg:#E5ECEA; --muted:#93A29F; --line:#283330;
+  --accent:#78A2F2; --accent-soft:#1B2742; --on-accent:#0D1312;
+  --ok:#53C487; --ok-soft:#14301F; --warn:#E3A84E; --warn-soft:#33270F; --bad:#EE7C68;
+  --shadow:0 18px 50px -24px rgba(0,0,0,.8); color-scheme:dark}
+
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:56px}
+h1,h2{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(30px,4.4vw,48px);font-weight:800;line-height:1.05}
+h2{font-size:clamp(22px,2.6vw,30px);font-weight:800}
+p{margin:0}
+.lede{max-width:64ch;color:var(--muted);font-size:17px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+header.intro{display:grid;gap:12px}
+.note{font-size:13px;color:var(--muted)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* ---------- player ---------- */
+.player{display:grid;gap:14px}
+.stage{overflow-x:auto;border-radius:14px;box-shadow:var(--shadow);border:1px solid var(--line);background:var(--surface)}
+.app{min-width:940px;height:600px;display:grid;grid-template-rows:auto 1fr;position:relative;font-size:13px;background:var(--surface2)}
+.top{display:flex;align-items:center;gap:14px;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+.logo{font-family:var(--f-display);font-weight:800;font-size:16px;white-space:nowrap}
+.logo b{color:var(--accent)}
+.search{flex:1;display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);border-radius:9px;padding:7px 10px;background:var(--surface2);position:relative;transition:border-color .2s}
+.search.active{border-color:var(--accent)}
+.search .kbd{font-family:var(--f-mono);font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+.search .q{flex:1;font-family:var(--f-mono);min-height:1.5em}
+.search .q.ph{color:var(--muted);font-family:var(--f-body)}
+.caret{display:inline-block;width:1px;height:1.1em;background:var(--fg);vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.chip{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.status{display:flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.results{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);z-index:5;overflow:hidden}
+.results div{display:flex;justify-content:space-between;gap:10px;padding:9px 12px;border-top:1px solid var(--line)}
+.results div:first-child{border-top:0;background:var(--accent-soft)}
+.results small{color:var(--muted)}
+
+.cols{display:grid;grid-template-columns:250px 1fr 300px;min-height:0}
+.inbox,.card{background:var(--surface);min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.inbox{border-right:1px solid var(--line)}
+.card{border-left:1px solid var(--line)}
+.panehead{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 8px;font-weight:600}
+.panehead small{font-weight:400;color:var(--muted)}
+.alert{margin:0 10px 8px;padding:8px 10px;border-radius:8px;background:var(--warn-soft);color:var(--warn);font-size:12px;font-weight:500}
+.chat{display:grid;grid-template-columns:32px 1fr auto;gap:9px;padding:9px 14px;border-top:1px solid var(--line);align-items:center;transition:background .3s}
+.chat.hl{background:var(--ok-soft)}
+.chat.new{animation:slidein .5s ease-out}
+@keyframes slidein{from{transform:translateY(-12px);opacity:.2}to{transform:none;opacity:1}}
+.av{width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:600;font-size:12px}
+.chat .t{min-width:0}
+.chat .n{font-weight:600}
+.chat .m{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat .r{text-align:right;font-size:11px;color:var(--muted)}
+.badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:99px;background:var(--ok);color:var(--surface);font-size:11px;font-weight:600;text-align:center}
+
+.center{display:flex;flex-direction:column;min-width:0;min-height:0}
+.tabs{display:flex;gap:4px;padding:10px 14px 0}
+.tab{padding:7px 12px;border-radius:8px 8px 0 0;color:var(--muted);font-weight:500;display:flex;gap:6px;align-items:center}
+.tab .kbd{font-family:var(--f-mono);font-size:10px;opacity:.7}
+.tab.on{background:var(--surface);color:var(--fg);box-shadow:inset 0 2px 0 var(--accent)}
+.pane{flex:1;background:var(--surface);margin:0 14px 14px;border-radius:0 10px 10px 10px;padding:14px;min-height:0;overflow:hidden}
+.kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;height:100%}
+.col{background:var(--surface2);border-radius:9px;padding:9px;display:flex;flex-direction:column;gap:7px}
+.col h4{margin:0 0 2px;font-size:12px;color:var(--muted);font-weight:600;display:flex;justify-content:space-between}
+.job{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 9px;display:grid;gap:2px;transition:all .3s}
+.job .id{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.job.hl{border-color:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+
+.caja{display:grid;grid-template-columns:1fr 210px;gap:14px;height:100%}
+.ticket{font-family:var(--f-mono);font-variant-numeric:tabular-nums;background:var(--surface2);border-radius:9px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden}
+.ticket .row{display:flex;justify-content:space-between;gap:10px}
+.ticket .row.new{animation:slidein .4s ease-out;color:var(--accent)}
+.ticket .sep{border-top:1px dashed var(--line);margin:4px 0}
+.ticket .tot{font-size:18px;font-weight:500}
+.ticket .meta{color:var(--muted);font-size:11px}
+.speed{font-family:var(--f-mono);font-size:10px;padding:1px 6px;border-radius:99px;background:var(--ok-soft);color:var(--ok);margin-left:6px}
+.stamp{position:absolute;right:18px;bottom:62px;transform:rotate(-9deg);border:3px solid var(--ok);color:var(--ok);font-family:var(--f-display);font-weight:800;font-size:26px;padding:2px 14px;border-radius:8px;animation:stamp .35s ease-out}
+@keyframes stamp{from{transform:rotate(-9deg) scale(1.8);opacity:0}}
+.pay{display:grid;gap:8px;align-content:start}
+.btn{border:1.5px solid var(--line);background:var(--surface);color:var(--fg);border-radius:9px;padding:9px 12px;font:inherit;font-weight:600;text-align:center;transition:all .2s}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.btn.pressed{transform:scale(.95);box-shadow:0 0 0 4px var(--accent-soft)}
+.cursor{position:absolute;width:18px;height:18px;pointer-events:none;z-index:9;transition:left .6s ease,top .6s ease;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))}
+
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.tile{background:var(--surface2);border-radius:9px;padding:12px;display:grid;gap:4px}
+.tile b{font-family:var(--f-display);font-size:28px;font-weight:800;font-variant-numeric:tabular-nums}
+.tile span{color:var(--muted);font-size:12px}
+.tile.warn b{color:var(--warn)} .tile.ok b{color:var(--ok)}
+.list{margin-top:12px;display:grid;gap:6px}
+.list div{display:flex;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:7px}
+
+.card .body{padding:0 14px 14px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
+.card.pop .body{animation:slidein .45s ease-out}
+.who{display:flex;gap:10px;align-items:center}
+.who .av{width:42px;height:42px;font-size:15px}
+.who b{font-size:15px;display:block}
+.who small{color:var(--muted)}
+.sec h5{margin:0 0 4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.kv{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--line)}
+.kv:first-of-type{border-top:0}
+.kv .l{min-width:0}
+.pill{font-size:11px;font-weight:600;padding:1px 8px;border-radius:99px;white-space:nowrap;align-self:center}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.blue{background:var(--accent-soft);color:var(--accent)}
+.banner{padding:10px 12px;border-radius:9px;background:var(--ok-soft);color:var(--ok);font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.banner.blue{background:var(--accent-soft);color:var(--accent)}
+.banner.warn{background:var(--warn-soft);color:var(--warn)}
+.actions{display:flex;gap:8px}
+.actions .btn{flex:1}
+.empty{color:var(--muted);text-align:center;padding:60px 18px}
+.bubble{background:var(--ok-soft);border-radius:10px 10px 10px 2px;padding:7px 10px;font-size:12px}
+
+.toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:500;box-shadow:var(--shadow);animation:slidein .35s ease-out;white-space:nowrap;z-index:8}
+
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.ctl{border:1.5px solid var(--line);background:var(--surface);color:var(--fg);border-radius:99px;padding:7px 14px;font:inherit;font-weight:600;cursor:pointer}
+.ctl:hover{border-color:var(--accent)}
+.ctl:focus-visible,.scene:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ctl.play{background:var(--accent);border-color:var(--accent);color:var(--on-accent);min-width:96px}
+.scenes{display:flex;flex-wrap:wrap;gap:6px;flex:1}
+.scene{border:0;background:transparent;color:var(--muted);font:inherit;padding:6px 10px;border-radius:8px;cursor:pointer;position:relative}
+.scene.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.progress{height:3px;background:var(--line);border-radius:3px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+.caption{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;align-items:baseline;max-width:80ch}
+.caption .stepno{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.caption b{font-size:18px;font-family:var(--f-display);font-weight:600}
+.caption p{grid-column:2;color:var(--muted)}
+
+/* ---------- sections ---------- */
+section{display:grid;gap:18px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:28px;align-items:center}
+.diagram{overflow-x:auto}
+.diagram svg{width:100%;min-width:560px;height:auto;display:block}
+.diagram .node{fill:var(--surface);stroke:var(--line);stroke-width:1.5}
+.diagram .hub{fill:var(--accent);stroke:none}
+.diagram .t1{fill:var(--fg);font:600 14px var(--f-body)}
+.diagram .t2{fill:var(--muted);font:12px var(--f-body)}
+.diagram .th{fill:var(--on-accent);font:800 17px var(--f-display)}
+.diagram .ths{fill:var(--on-accent);font:12px var(--f-body);opacity:.85}
+.diagram line{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:4 4}
+ul.points{margin:0;padding-left:18px;display:grid;gap:8px;max-width:60ch}
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:560px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:11px 14px;border-top:1px solid var(--line)}
+thead th{border-top:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td.new{color:var(--ok);font-weight:600}
+.timeline{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.slot{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:6px;align-content:start}
+.slot .when{font-family:var(--f-mono);font-size:12px;color:var(--accent)}
+.slot b{font-family:var(--f-display);font-size:16px}
+.slot p{color:var(--muted);font-size:13px}
+.slot.go{border-color:var(--ok)} .slot.go .when{color:var(--ok)}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <span class="eyebrow">Informática Torrent · new counter app · mock-up</span>
+    <h1>Torrent 360: WhatsApp, Taller and Caja on one screen</h1>
+    <p class="lede">A walk-through of how the unified app would look and behave at the counter. Press play to watch it like a short video, or click a scene. Customers, orders and amounts are invented examples.</p>
+  </header>
+
+  <div class="player" aria-label="App walk-through">
+    <div class="stage">
+      <div class="app" id="app">
+        <div class="top">
+          <div class="logo">Torrent <b>360</b></div>
+          <div class="search" id="search"></div>
+          <div class="status"><span class="dot"></span>Caja abierta · Joney</div>
+        </div>
+        <div class="cols">
+          <aside class="inbox">
+            <div class="panehead">WhatsApp <small id="waiting"></small></div>
+            <div id="alert"></div>
+            <div id="chats"></div>
+          </aside>
+          <div class="center">
+            <div class="tabs" id="tabs"></div>
+            <div class="pane" id="pane"></div>
+          </div>
+          <aside class="card" id="card"></aside>
+        </div>
+        <div id="toast"></div>
+        <svg class="cursor" id="cursor" viewBox="0 0 24 24" hidden><path d="M3 2l7 19 2.5-8L21 10z" fill="var(--fg)" stroke="var(--surface)" stroke-width="1.5"/></svg>
+      </div>
+    </div>
+    <div class="progress"><i id="bar"></i></div>
+    <div class="controls">
+      <button class="ctl play" id="play" type="button">Play</button>
+      <button class="ctl" id="prev" type="button" aria-label="Previous step">←</button>
+      <button class="ctl" id="next" type="button" aria-label="Next step">→</button>
+      <div class="scenes" id="scenes"></div>
+    </div>
+    <div class="caption" aria-live="polite"><span class="stepno" id="stepno"></span><b id="captitle"></b><p id="captext"></p></div>
+  </div>
+
+  <section>
+    <span class="eyebrow">How it fits together</span>
+    <div class="two">
+      <div style="display:grid;gap:14px">
+        <h2>One customer record, everything hanging off it</h2>
+        <ul class="points">
+          <li>Today the same person exists up to 4 times across Reparo, TPV and WhatsApp Pro. In Torrent 360 there is one record.</li>
+          <li>Phone numbers, emails and NIF can't be repeated, so a second record is never created by accident.</li>
+          <li>The device (IMEI or serial) has its own record: every repair, sale and warranty follows the phone, not the paperwork.</li>
+          <li>Nothing is copied between modules, so nothing goes out of date.</li>
+        </ul>
+      </div>
+      <div class="diagram">
+        <svg viewBox="0 0 640 380" role="img" aria-label="Customer record in the centre linked to contact details, devices, repairs, sales and invoices, WhatsApp chats, and deposits and tasks">
+          <line x1="320" y1="190" x2="110" y2="60"/><line x1="320" y1="190" x2="530" y2="60"/>
+          <line x1="320" y1="190" x2="95" y2="190"/><line x1="320" y1="190" x2="545" y2="190"/>
+          <line x1="320" y1="190" x2="110" y2="320"/><line x1="320" y1="190" x2="530" y2="320"/>
+          <rect class="hub" x="225" y="148" width="190" height="84" rx="14"/>
+          <text class="th" x="320" y="185" text-anchor="middle">Cliente 360</text>
+          <text class="ths" x="320" y="206" text-anchor="middle">one person, one record</text>
+          <g><rect class="node" x="20" y="30" width="180" height="60" rx="10"/><text class="t1" x="36" y="56">Contact details</text><text class="t2" x="36" y="75">phone · email · NIF · consent</text></g>
+          <g><rect class="node" x="440" y="30" width="180" height="60" rx="10"/><text class="t1" x="456" y="56">Devices</text><text class="t2" x="456" y="75">IMEI · serial · warranty</text></g>
+          <g><rect class="node" x="10" y="160" width="170" height="60" rx="10"/><text class="t1" x="26" y="186">WhatsApp chats</text><text class="t2" x="26" y="205">messages · 24 h window</text></g>
+          <g><rect class="node" x="460" y="160" width="170" height="60" rx="10"/><text class="t1" x="476" y="186">Repairs</text><text class="t2" x="476" y="205">orders · history · QR</text></g>
+          <g><rect class="node" x="20" y="290" width="180" height="60" rx="10"/><text class="t1" x="36" y="316">Deposits &amp; tasks</text><text class="t2" x="36" y="335">señal · vales · pendientes</text></g>
+          <g><rect class="node" x="440" y="290" width="180" height="60" rx="10"/><text class="t1" x="456" y="316">Sales &amp; invoices</text><text class="t2" x="456" y="335">tickets · F-2026 · Verifactu</text></g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">What changes</span>
+    <h2>Today vs. Torrent 360</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>At the counter</th><th>Today</th><th>Torrent 360</th></tr></thead>
+        <tbody>
+          <tr><td>Apps and logins</td><td>3 apps + Mostrador panel</td><td class="new">1 app, 1 login</td></tr>
+          <tr><td>Open the till</td><td>3–4 s (reloads 9,100 products)</td><td class="new">Instant, already loaded</td></tr>
+          <tr><td>Scan a barcode</td><td>12 ms</td><td class="new">12 ms or less</td></tr>
+          <tr><td>Search a customer or order</td><td>0.9 s, one app at a time</td><td class="new">Under 0.3 s, everything at once</td></tr>
+          <tr><td>Charge a finished repair</td><td>Reparo → TPV → back to Reparo</td><td class="new">1 click: paid, delivered, warranty started</td></tr>
+          <tr><td>Monthly automation credits</td><td>≈ 900 (after the audit)</td><td class="new">≈ 550–650 (estimate)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Switch-over weekend</span>
+    <h2>The shop never closes for it</h2>
+    <p class="lede">The new app is built and tested alongside the current ones for weeks. The change itself happens while the shop is shut, and can be undone until Monday at 14:00.</p>
+    <div class="timeline">
+      <div class="slot"><span class="when">Sat 14:00</span><b>Freeze</b><p>Shop closes, Z of the till, old apps paused.</p></div>
+      <div class="slot"><span class="when">Sat 15:00</span><b>Final copy</b><p>Last backup and import of everything since the night before.</p></div>
+      <div class="slot"><span class="when">Sat 16:00</span><b>Checks</b><p>Counts, sales totals, invoice numbers and the Verifactu chain must match.</p></div>
+      <div class="slot"><span class="when">Sun 10:00</span><b>WhatsApp moves</b><p>Meta sends messages to the new app. Tests only with Joney's phone.</p></div>
+      <div class="slot go"><span class="when">Mon 09:30</span><b>Open as usual</b><p>Same order numbers, same QR codes, same invoice series.</p></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  const baseChats = () => ([
+    {n:'Pau Ferrer', m:'Vale, mañana me paso', t:'10:12', u:0},
+    {n:'Marta Gil', m:'¿Cuánto cuesta cambiar la batería?', t:'10:05', u:2},
+    {n:'Andreu S.', m:'Foto del portátil adjunta', t:'09:58', u:1},
+    {n:'Nuria Vidal', m:'Gracias!!', t:'09:41', u:0},
+  ]);
+  const fresh = () => ({
+    chats: baseChats(), alert:null, tab:'taller', press:null, toast:null, cursor:null,
+    kanban:{
+      taller:[{id:'#39420',d:'MacBook Air · teclado'},{id:'#39418',d:'Xiaomi 13 · conector'},{id:'#39415',d:'PS5 · HDMI'}],
+      pieza:[{id:'#39409',d:'iPad 9 · pantalla'},{id:'#39401',d:'Galaxy S22 · tapa'}],
+      listo:[{id:'#39412',d:'iPhone 13 · pantalla'},{id:'#39407',d:'Switch · joy-con'}],
+    },
+    card:{kind:'empty'},
+    ticket:{lines:[], paid:false, method:null, number:null},
+    search:{q:'', chip:null, results:null},
+  });
+
+  const laura = (extra) => Object.assign({
+    kind:'person', name:'Laura Martí', initials:'LM', sub:'Cliente desde 2021 · 6 visitas',
+    contact:'600 11 22 33 · WhatsApp ✓ · Avisos ✓',
+    banner:{cls:'', text:'Listo para recoger', right:'89,00 €'},
+    orders:[{l:'#39412 iPhone 13 · pantalla', p:'Listo', c:'ok'}],
+    devices:[{l:'iPhone 13 · IMEI …4417', p:'En taller', c:'blue'}],
+    sales:[{l:'T-2026/0640 · funda + cristal', p:'24,90 €', c:''}],
+    msg:'Hola! ¿Ya está mi móvil?',
+    actions:[{l:'Cobrar', cls:'primary', id:'cobrar'},{l:'Avisar', cls:'', id:'avisar'}],
+  }, extra || {});
+
+  const scenes = ['WhatsApp arrives','1-click charge','Scan anything','Budget by chat','One search box','Today panel'];
+  const steps = [
+    {s:0, t:'A normal morning', x:'WhatsApp inbox on the left, the workshop board in the middle, the customer card on the right. One app, one login.', d:3200,
+      f:(st)=>{}},
+    {s:0, t:'A customer writes', x:'Laura sends “¿Ya está mi móvil?”. The app recognises her number and finds that her repair is ready.', d:3200,
+      f:(st)=>{ st.chats.unshift({n:'Laura Martí', m:'Hola! ¿Ya está mi móvil?', t:'10:14', u:1, hl:1, nw:1}); st.alert='Laura Martí tiene una reparación lista para recoger'; }},
+    {s:0, t:'Her card pops up by itself', x:'Repair #39412 is ready, 89 €. Charge or send a notice without searching in another app.', d:4200,
+      f:(st)=>{ st.chats[0].nw=0; st.card=laura({pop:1}); st.kanban.listo[0].hl=1; }},
+    {s:1, t:'She walks in. Click “Cobrar”', x:'The till opens in the same screen with the repair already on the ticket and her 20 € deposit taken off.', d:3600,
+      f:(st)=>{ st.press='cobrar'; st.cursor='cobrar'; st.tab='caja'; st.card.pop=0;
+        st.ticket.lines=[{d:'Reparación #39412 · pantalla iPhone 13', a:'89,00'},{d:'Señal entregada 28/10', a:'−20,00'}]; }},
+    {s:1, t:'Pay by card', x:'The server works out the total and VAT and gives the ticket its number. Prices can’t be changed from the browser.', d:3400,
+      f:(st)=>{ st.press='tarjeta'; st.cursor='tarjeta'; st.ticket.method='Tarjeta'; st.ticket.paid=true; st.ticket.number='T-2026/0813'; }},
+    {s:1, t:'Everything closes in one go', x:'Paid, order marked delivered, 3-month warranty started on the device, ticket linked. No “paid but not delivered”.', d:4600,
+      f:(st)=>{ st.press=null; st.cursor=null; st.kanban.listo.shift();
+        st.card=laura({banner:{cls:'', text:'Entregado · pagado con tarjeta', right:'T-2026/0813'},
+          orders:[{l:'#39412 iPhone 13 · pantalla', p:'Entregado', c:'ok'}],
+          devices:[{l:'iPhone 13 · IMEI …4417', p:'Garantía hasta 02/02/2027', c:'ok'}],
+          sales:[{l:'T-2026/0813 · reparación', p:'69,00 €', c:''},{l:'T-2026/0640 · funda + cristal', p:'24,90 €', c:''}],
+          actions:[{l:'Enviar ticket por WhatsApp', cls:'', id:'x'}]});
+        st.toast='T-2026/0813 cobrado · #39412 entregada · garantía iniciada'; }},
+    {s:2, t:'Scan a product', x:'A barcode goes straight onto a new ticket. The catalogue is kept on the computer, so it takes about 12 ms.', d:3400,
+      f:(st)=>{ st.toast=null; st.ticket={lines:[{d:'Cargador USB-C 20W', a:'14,90', nw:1, fast:1}], paid:false, method:null, number:null}; st.card={kind:'empty'}; }},
+    {s:2, t:'Scan an IMEI', x:'The phone’s own number opens its history: owner, past repairs and how much warranty is left.', d:4600,
+      f:(st)=>{ st.ticket.lines[0].nw=0; st.search={q:'356938035643809', chip:'IMEI', results:null};
+        st.card={kind:'device', pop:1}; }},
+    {s:3, t:'A budget answer comes in', x:'Marc replies “Sí, adelante” to the 120 € battery-and-port budget. The card offers the matching button.', d:3800,
+      f:(st)=>{ st.search={q:'',chip:null,results:null}; st.tab='taller';
+        st.chats.unshift({n:'Marc Puig', m:'Sí, adelante con la reparación', t:'10:31', u:1, hl:1, nw:1});
+        st.chats.forEach((c,i)=>{ if(i) c.hl=0; });
+        st.alert='Marc Puig ha respondido a un presupuesto';
+        st.kanban.taller.push({id:'#39423',d:'Galaxy A54 · batería + conector · presupuesto', hl:1});
+        st.card={kind:'budget', pop:1}; }},
+    {s:3, t:'One click accepts it', x:'The order moves to the workshop queue and Marc gets the confirmation on WhatsApp automatically.', d:4000,
+      f:(st)=>{ st.chats[0].nw=0; st.press='aceptar'; st.cursor='aceptar'; st.card={kind:'budget', accepted:1};
+        st.kanban.taller[3].d='Galaxy A54 · batería + conector'; st.alert=null;
+        st.toast='Presupuesto aceptado · confirmación enviada a Marc'; }},
+    {s:4, t:'Type a phone number', x:'The search box works out what you typed. 9 digits means a phone, so it shows the customer.', d:3200,
+      f:(st)=>{ st.press=null; st.cursor=null; st.toast=null; st.card={kind:'empty'};
+        st.search={q:'600 11 22 33', chip:'Teléfono', results:[['Laura Martí','2 dispositivos · 7 tickets'],['Chat de WhatsApp','hoy 10:14']]}; }},
+    {s:4, t:'An order number', x:'Up to 7 digits is an order.', d:2800,
+      f:(st)=>{ st.search={q:'39423', chip:'Orden', results:[['#39423 Galaxy A54 · batería + conector','Marc Puig · En taller'],['Ticket de entrada','28/10 · señal 0 €']]}; }},
+    {s:4, t:'A ticket number', x:'The ticket format goes straight to the sale, with its invoice if there is one.', d:2800,
+      f:(st)=>{ st.search={q:'T-2026/0813', chip:'Ticket', results:[['T-2026/0813 · 69,00 € · Tarjeta','Laura Martí · hoy 10:22'],['Reparación #39412','Entregado']]}; }},
+    {s:4, t:'Or just a name', x:'Anything else is a name, across customers, chats and orders at once.', d:3000,
+      f:(st)=>{ st.search={q:'puig', chip:'Nombre', results:[['Marc Puig','Galaxy A54 · 1 orden abierta'],['Jordi Puig','iPad 9 · entregado 12/09']]}; }},
+    {s:5, t:'“Hoy”: the day at a glance', x:'Built from live data: who can collect, chats waiting, budgets, parts, the till. This replaces the separate Mostrador panel.', d:5200,
+      f:(st)=>{ st.search={q:'',chip:null,results:null}; st.tab='hoy'; st.alert=null; }},
+  ];
+
+  const sceneStart = scenes.map((_,i)=>steps.findIndex(s=>s.s===i));
+
+  function stateAt(n){ const st=fresh(); for(let i=0;i<=n;i++) steps[i].f(st); return st; }
+
+  function rowsHtml(rows){ return rows.map(r=>`<div class="kv"><span class="l">${esc(r.l)}</span>${r.c!==undefined&&r.c!==''?`<span class="pill ${r.c}">${esc(r.p)}</span>`:`<span class="mono">${esc(r.p)}</span>`}</div>`).join(''); }
+  function btns(list, press){ return `<div class="actions">${list.map(a=>`<span class="btn ${a.cls}${press===a.id?' pressed':''}" data-id="${a.id}">${esc(a.l)}</span>`).join('')}</div>`; }
+
+  function cardHtml(st){
+    const c=st.card;
+    if(c.kind==='empty') return `<div class="panehead">Ficha del cliente</div><div class="empty">Elige un chat, una orden o escanea algo y aquí aparece todo lo del cliente.</div>`;
+    if(c.kind==='person') return `<div class="panehead">Ficha del cliente <small>Cliente 360</small></div><div class="body">
+      <div class="who"><span class="av">${c.initials}</span><div><b>${esc(c.name)}</b><small>${esc(c.sub)}</small></div></div>
+      <div class="banner ${c.banner.cls}"><span>${esc(c.banner.text)}</span><span class="mono">${esc(c.banner.right)}</span></div>
+      ${btns(c.actions, st.press)}
+      <div class="sec"><h5>Contacto</h5><div class="note">${esc(c.contact)}</div></div>
+      <div class="sec"><h5>Reparaciones</h5>${rowsHtml(c.orders)}</div>
+      <div class="sec"><h5>Dispositivos</h5>${rowsHtml(c.devices)}</div>
+      <div class="sec"><h5>Tickets</h5>${rowsHtml(c.sales)}</div>
+      <div class="sec"><h5>Último mensaje</h5><div class="bubble">${esc(c.msg)}</div></div></div>`;
+    if(c.kind==='device') return `<div class="panehead">Dispositivo <small>IMEI escaneado</small></div><div class="body">
+      <div class="who"><span class="av">A54</span><div><b>Samsung Galaxy A54</b><small class="mono">IMEI 356938035643809</small></div></div>
+      <div class="banner"><span>En garantía</span><span>quedan 58 días</span></div>
+      <div class="actions"><span class="btn primary">Abrir en garantía</span></div>
+      <div class="sec"><h5>Dueño</h5>${rowsHtml([{l:'Marc Puig',p:'600 44 55 66',c:''}])}</div>
+      <div class="sec"><h5>Historial</h5>${rowsHtml([{l:'#38870 · batería',p:'30/09/2026',c:''},{l:'#37122 · cristal trasero',p:'14/03/2026',c:''},{l:'Comprado aquí · T-2025/1904',p:'02/11/2025',c:''}])}</div>
+      <div class="sec"><h5>Garantía</h5><div class="note">Reparación #38870 · 3 meses · hasta 30/12/2026</div></div></div>`;
+    if(c.kind==='budget') return `<div class="panehead">Ficha del cliente <small>Cliente 360</small></div><div class="body">
+      <div class="who"><span class="av">MP</span><div><b>Marc Puig</b><small>Cliente desde 2025 · 4 visitas</small></div></div>
+      <div class="sec"><h5>Respuesta por WhatsApp</h5><div class="bubble">Sí, adelante con la reparación</div></div>
+      ${c.accepted
+        ? `<div class="banner"><span>Presupuesto aceptado</span><span class="mono">120,00 €</span></div>`
+        : `<div class="banner warn"><span>Presupuesto pendiente</span><span class="mono">120,00 €</span></div>`}
+      ${c.accepted ? '' : btns([{l:'Aceptar presupuesto',cls:'primary',id:'aceptar'},{l:'Llamar',cls:'',id:'x'}], st.press)}
+      <div class="sec"><h5>Orden #39423</h5>${rowsHtml([{l:'Galaxy A54 · batería + conector',p:c.accepted?'En taller':'Presupuesto',c:c.accepted?'blue':'warn'},{l:'Técnico',p:'Joney',c:''}])}</div>
+      <div class="sec"><h5>Dispositivos</h5>${rowsHtml([{l:'Galaxy A54 · IMEI …3809',p:'Garantía 58 días',c:'ok'}])}</div></div>`;
+    return '';
+  }
+
+  function paneHtml(st){
+    if(st.tab==='taller'){
+      const col=(k,h)=>`<div class="col"><h4><span>${h}</span><span class="mono">${st.kanban[k].length}</span></h4>${st.kanban[k].map(j=>`<div class="job${j.hl?' hl':''}"><span class="id">${j.id}</span><span>${esc(j.d)}</span></div>`).join('')}</div>`;
+      return `<div class="kanban">${col('taller','En taller')}${col('pieza','Esperando pieza')}${col('listo','Listo para recoger')}</div>`;
+    }
+    if(st.tab==='caja'){
+      const t=st.ticket;
+      const total=t.lines.reduce((s,l)=>s+parseFloat(l.a.replace('−','-').replace(',','.')),0);
+      return `<div class="caja"><div class="ticket">
+        <div class="meta">${t.number?esc(t.number):'Ticket nuevo'} · ${t.lines.length?'Laura Martí':'sin cliente'}</div>
+        ${t.lines.map(l=>`<div class="row${l.nw?' new':''}"><span>${esc(l.d)}${l.fast?'<span class="speed">12 ms</span>':''}</span><span>${l.a}</span></div>`).join('')}
+        <div style="flex:1"></div><div class="sep"></div>
+        <div class="row meta"><span>Base imponible</span><span>${(total/1.21).toFixed(2).replace('.',',')}</span></div>
+        <div class="row meta"><span>IVA 21 %</span><span>${(total-total/1.21).toFixed(2).replace('.',',')}</span></div>
+        <div class="row tot"><span>Total</span><span>${total.toFixed(2).replace('.',',')} €</span></div>
+        ${t.paid?'<div class="stamp">PAGADO</div>':''}
+      </div><div class="pay">
+        <span class="btn${t.method==='Tarjeta'?' ok':''}${st.press==='tarjeta'?' pressed':''}" data-id="tarjeta">Tarjeta</span>
+        <span class="btn">Efectivo</span><span class="btn">Bizum</span><span class="btn">Vale / señal</span>
+        <span class="note">Lector listo · escanea un código</span>
+      </div></div>`;
+    }
+    if(st.tab==='hoy'){
+      return `<div class="tiles">
+        <div class="tile ok"><b>11</b><span>Listos para recoger</span></div>
+        <div class="tile warn"><b>3</b><span>Chats esperando respuesta</span></div>
+        <div class="tile"><b>4</b><span>Presupuestos sin respuesta</span></div>
+        <div class="tile"><b>2</b><span>Piezas llegadas hoy</span></div>
+        <div class="tile"><b class="mono">1.240 €</b><span>Caja de hoy · 18 tickets</span></div>
+        <div class="tile warn"><b>5</b><span>Pendientes (tareas)</span></div>
+      </div><div class="list">
+        <div><span>#39407 Switch · joy-con · listo hace 6 días</span><span class="pill warn">Recordar</span></div>
+        <div><span>Marta Gil · pregunta precio batería · 26 min</span><span class="pill warn">Responder</span></div>
+        <div><span>#39409 iPad 9 · pantalla llegada</span><span class="pill blue">Avisar</span></div>
+      </div>`;
+    }
+    return '';
+  }
+
+  function render(n){
+    const st=stateAt(n), step=steps[n];
+    // search
+    const s=st.search;
+    $('search').className='search'+(s.q?' active':'');
+    $('search').innerHTML = `<span class="kbd">⌘K</span>`+
+      (s.q?`<span class="q">${esc(s.q)}<span class="caret"></span></span>`:`<span class="q ph">Buscar teléfono, nombre, orden, ticket, IMEI o código…</span>`)+
+      (s.chip?`<span class="chip">${esc(s.chip)}</span>`:'')+
+      (s.results?`<div class="results">${s.results.map(r=>`<div><span>${esc(r[0])}</span><small>${esc(r[1])}</small></div>`).join('')}</div>`:'');
+    // inbox
+    const waiting=st.chats.filter(c=>c.u).length;
+    $('waiting').textContent = waiting+' esperando';
+    $('alert').innerHTML = st.alert?`<div class="alert">${esc(st.alert)}</div>`:'';
+    $('chats').innerHTML = st.chats.slice(0,6).map(c=>`<div class="chat${c.hl?' hl':''}${c.nw?' new':''}"><span class="av">${esc(c.n.split(' ').map(w=>w[0]).join('').slice(0,2))}</span><div class="t"><div class="n">${esc(c.n)}</div><div class="m">${esc(c.m)}</div></div><div class="r">${c.t}<br>${c.u?`<span class="badge">${c.u}</span>`:''}</div></div>`).join('');
+    // tabs + pane
+    const tabs=[['taller','Taller','F1'],['caja','Caja','F2'],['asist','Asistente','F3'],['hoy','Hoy','F4']];
+    $('tabs').innerHTML = tabs.map(t=>`<span class="tab${st.tab===t[0]?' on':''}">${t[1]} <span class="kbd">${t[2]}</span></span>`).join('');
+    $('pane').innerHTML = paneHtml(st);
+    // card
+    $('card').className='card'+(st.card.pop?' pop':'');
+    $('card').innerHTML = cardHtml(st);
+    // toast
+    $('toast').innerHTML = st.toast?`<div class="toast">${esc(st.toast)}</div>`:'';
+    // cursor
+    const cur=$('cursor');
+    if(st.cursor){
+      const target=$('app').querySelector(`[data-id="${st.cursor}"]`);
+      if(target){ const a=$('app').getBoundingClientRect(), b=target.getBoundingClientRect();
+        cur.style.left=(b.left-a.left+b.width*0.6)+'px'; cur.style.top=(b.top-a.top+b.height*0.55)+'px'; cur.hidden=false; }
+    } else cur.hidden=true;
+    // caption + scenes
+    $('stepno').textContent = String(n+1).padStart(2,'0')+'/'+steps.length;
+    $('captitle').textContent = step.t;
+    $('captext').textContent = step.x;
+    document.querySelectorAll('.scene').forEach((b,i)=>b.classList.toggle('on', i===step.s));
+    $('bar').style.width = ((n+1)/steps.length*100)+'%';
+  }
+
+  $('scenes').innerHTML = scenes.map((s,i)=>`<button class="scene" type="button" data-s="${i}">${i+1}. ${s}</button>`).join('');
+
+  let cur=2, timer=null, playing=false;
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function go(n){ cur=(n+steps.length)%steps.length; render(cur); if(playing) schedule(); }
+  function schedule(){ clearTimeout(timer); timer=setTimeout(()=>go(cur+1), steps[cur].d); }
+  function setPlay(p){ playing=p; $('play').textContent=p?'Pause':'Play'; if(p) schedule(); else clearTimeout(timer); }
+  $('play').onclick=()=>{ if(!playing && cur===steps.length-1) cur=-1, go(0); setPlay(!playing); };
+  $('next').onclick=()=>{ setPlay(false); go(cur+1); };
+  $('prev').onclick=()=>{ setPlay(false); go(cur-1); };
+  $('scenes').onclick=(e)=>{ const b=e.target.closest('.scene'); if(!b) return; go(sceneStart[+b.dataset.s]); };
+  render(cur);
+  if(!reduce) setTimeout(()=>{ if(!playing) setPlay(true); }, 2500);
+})();
+</script>
