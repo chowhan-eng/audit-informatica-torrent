@@ -64,4 +64,33 @@ How to do each one: see `audit/BACKLOG.csv` (acceptance criteria). Read only the
 7. **Mostrador:** not started (B-47 panel, morningBrief, healthCheck, HealthCheck entity, secrets).
 8. **Data:** status/fields for mail-in (B-45); KB entries D-40/D-41; settings `reminders_live`/`library_autoreply_mode` stay off (trial week).
 
+## RESUME FROM CLAUDE DESKTOP — read this first (2 Nov 2026)
+
+**Exact function names and source folders** (all under `audit/impl/projects/`). Each folder holds `entry.ts`; send it with `POST /api/apps/{app}/coding/redeploy-function/{name}` (Base44 connector `execute_api`) or `base44 deploy` after the CLI login.
+
+| App | Function | Source |
+|---|---|---|
+| Reparo | `tpvBridge` (there is no "reparoTpvBridge") | `B-40-cobrar-en-tpv/files/reparo/base44/functions/tpvBridge` |
+| Reparo | `mostradorLookup` | `B-47-mostrador/files/reparo/base44/functions/mostradorLookup` |
+| Reparo | `wizardNotify` | `extra-wizard-voz-frp/files/reparo/base44/functions/wizardNotify` |
+| Reparo | `customerReminders` | `B-24-B-41-avisos/files/reparo/base44/functions/customerReminders` |
+| Reparo | `allocateOrderNumber` | `batch-tpv-reparo-1031/files/reparo/base44/functions/allocateOrderNumber` |
+| Reparo | `voiceDigest` | `extra-wizard-voz-frp/files/reparo/base44/functions/voiceDigest` |
+| Reparo | `retentionSweep` | `extra-wizard-voz-frp/files/reparo/base44/functions/retentionSweep` |
+| Reparo | `dailyBackup` (needs entity BackupRun first) | `B-09-backup/files/reparo/base44/functions/dailyBackup` |
+| TPV | `mostradorLookup` | `B-47-mostrador/files/tpv/base44/functions/mostradorLookup` |
+| TPV | `dailyBackup` (BackupRun already exists) | `B-09-backup/files/tpv/base44/functions/dailyBackup` |
+| Mostrador | panel + `morningBrief`, `healthCheck` | `B-47-mostrador/files/mostrador`, `extra-wizard-voz-frp/files/mostrador` |
+
+Notes:
+- Reparo is old runtime (`Deno.serve` + `Deno.env`); TPV and Mostrador are new runtime (`export default` + shared imports, which resolve with redeploy-function).
+- After creating `tpvBridge`, test Order → Cobrar en TPV → pay → Reparo shows Cobrado/Entregado. Pending ReparoSync rows are retried by TPV `reparoSyncSweep`.
+
+**MOSTRADOR_KEY must be regenerated.**
+- The value set on 31 Oct (WhatsApp Pro, TPV, Reparo) was generated in the cloud container and is not saved anywhere else. Base44 secrets cannot be read back.
+- So, when deploying Mostrador: generate a new random value (e.g. PowerShell `[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))`) and set the same `MOSTRADOR_KEY` in all 4 apps (WhatsApp Pro, TPV, Reparo, Mostrador). Setting a secret redeploys that app's existing functions.
+- OUTBOUND_LOG_SECRET and TPV_BRIDGE_KEY/REPARO_TPV_KEY are already set in both apps that use them; nothing to do.
+
+**Still to check after everything:** one real TPV sale after the deploy (none seen yet; last one 31 Oct 12:44).
+
 **Security finding during deploy:** the GitHub repo `chowhan-eng/audit-informatica-torrent` is PUBLIC. It contains business details and this audit. Make it private.
